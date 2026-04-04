@@ -1,0 +1,3 @@
+[0m[[0m[31merror[0m] [0m[0mC:\Users\thlee\repos\xpark\src\main\java\org\apache\spark\deploy\history\XParkHistoryPlugin.java:11:1: cannot find symbol[0m
+[0m[[0m[31merror[0m] [0m[0m  symbol: class SparkHistoryServerPlugin[0m
+[0m[[0m[31merror[0m] [0m[0mSparkHistoryServerPlugin[0m

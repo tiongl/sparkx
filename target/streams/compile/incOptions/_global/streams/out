@@ -1,0 +1,44 @@
+[0m[[0m[0mdebug[0m] [0m[0mCreated transactional ClassFileManager with tempDir = C:\Users\thlee\repos\xpark\target\scala-2.12\classes.bak[0m
+[0m[[0m[0mdebug[0m] [0m[0mAbout to delete class files:[0m
+[0m[[0m[0mdebug[0m] [0m[0mWe backup class files:[0m
+[0m[[0m[0mdebug[0m] [0m[0mCreated transactional ClassFileManager with tempDir = C:\Users\thlee\repos\xpark\target\scala-2.12\classes.bak[0m
+[0m[[0m[0mdebug[0m] [0m[0mAbout to delete class files:[0m
+[0m[[0m[0mdebug[0m] [0m[0mWe backup class files:[0m
+[0m[[0m[0mdebug[0m] [0m[0mRegistering generated classes:[0m
+[0m[[0m[0mdebug[0m] [0m[0m	BroadcastPage.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	XParkConfig.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	GCPressureIssue.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	StragglerIssue$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	XParkHistoryPlugin.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	BroadcastSizeIssue.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	DataSkewIssue.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	XParkListener.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	SpillPage.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	Utils.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	XParkPluginBridge.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	DataSkewIssue$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	XParkTab.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	SkewPage.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	Warning$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	IssueDetector$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	Info$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	PerformanceIssue.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	StragglerPage.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	Info.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	XParkTab$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	GCPage.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	ShuffleSpillIssue$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	Utils$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	XParkConfig$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	StragglerIssue.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	BroadcastSizeIssue$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	GCPressureIssue$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	Warning.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	OverviewPage.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	IssueDetector.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	XParkPluginBridge$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	Critical.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	ShuffleSpillIssue.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	Severity.class[0m
+[0m[[0m[0mdebug[0m] [0m[0m	Critical$.class[0m
+[0m[[0m[0mdebug[0m] [0m[0mRemoving the temporary directory used for backing up class files: C:\Users\thlee\repos\xpark\target\scala-2.12\classes.bak[0m
