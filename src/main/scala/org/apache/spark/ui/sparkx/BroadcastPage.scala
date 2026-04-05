@@ -1,10 +1,10 @@
-package org.apache.spark.ui.xpark
+package org.apache.spark.ui.sparkx
 
 import org.apache.spark.ui.{UIUtils, WebUIPage}
 import javax.servlet.http.HttpServletRequest
 import scala.xml.Node
 
-class BroadcastPage(parent: XParkTab) extends WebUIPage("broadcast") {
+class BroadcastPage(parent: SparkXTab) extends WebUIPage("broadcast") {
 
   override def render(request: HttpServletRequest): Seq[Node] = {
     val broadcasts = IssueDetector.broadcastRDDs(parent.sparkUI.store, parent.config)
@@ -37,6 +37,6 @@ class BroadcastPage(parent: XParkTab) extends WebUIPage("broadcast") {
         }
       </div>
 
-    UIUtils.headerSparkPage(request, "xpark — Broadcast Size Analysis", content, parent)
+    UIUtils.headerSparkPage(request, "sparkx — Broadcast Size Analysis", content, parent)
   }
 }
