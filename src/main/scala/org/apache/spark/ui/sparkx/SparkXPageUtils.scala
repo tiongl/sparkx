@@ -5,6 +5,29 @@ import javax.servlet.http.HttpServletRequest
 /** URL helpers that work for both live Spark UI and History Server. */
 object SparkXPageUtils {
 
+  /** Sub-navigation entries: (label, subPath) */
+  private val subPages: Seq[(String, String)] = Seq(
+    "Overview"   -> "",
+    "Root Cause" -> "rootcause",
+    "Stages"     -> "stages"
+  )
+
+  /** Render the sparkx sub-navigation bar. `activeSubPath` is the current page's subPath. */
+  def subNavBar(request: HttpServletRequest, activeSubPath: String): scala.xml.Elem = {
+    <div style="margin-bottom:16px">
+      <ul class="nav nav-pills" style="border-bottom:1px solid #ddd;padding-bottom:8px">
+        {subPages.map { case (label, path) =>
+          val isActive = path == activeSubPath
+          val cls = if (isActive) "nav-item active" else "nav-item"
+          val linkCls = if (isActive) "nav-link active" else "nav-link"
+          <li class={cls}>
+            <a class={linkCls} href={sparkxSubUrl(request, path)}>{label}</a>
+          </li>
+        }}
+      </ul>
+    </div>
+  }
+
   def stageUrl(request: HttpServletRequest, stageId: Int, attemptId: Int = 0): String = {
     val base = appBase(request)
     s"$base/stages/stage/?id=$stageId&attempt=$attemptId"

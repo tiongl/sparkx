@@ -54,6 +54,7 @@ class StragglerPage(parent: SparkXTab) extends WebUIPage("stragglers") {
         }
       </div>
 
-    UIUtils.headerSparkPage(request, "sparkx — Straggler Task Analysis", content, parent)
+    UIUtils.headerSparkPage(request, "sparkx — Straggler Task Analysis",
+      SparkXPageUtils.subNavBar(request, "stragglers") ++ content, parent)
   }
 }

@@ -35,7 +35,13 @@ object SparkXDemo {
     "spill"        -> ShuffleSpillScenario,
     "broadcast"    -> BroadcastScenario,
     "smalltasks"   -> SmallTasksScenario,
-    "failures"     -> TaskFailuresScenario
+    "failures"     -> TaskFailuresScenario,
+    "lowcpu"       -> LowCpuScenario,
+    "scheddelay"   -> SchedulerDelayScenario,
+    "slowser"      -> SlowSerializationScenario,
+    "rc-skew"      -> RootCauseSkewScenario,
+    "rc-memory"    -> RootCauseMemoryScenario,
+    "rc-instability" -> RootCauseInstabilityScenario
   )
 
   def main(args: Array[String]): Unit = {
@@ -45,7 +51,10 @@ object SparkXDemo {
     val toRun: Seq[Scenario] = scenarioArg match {
       case "all" => Seq(DataSkewScenario, StragglerScenario, GCPressureScenario,
                         ShuffleSpillScenario, BroadcastScenario,
-                        SmallTasksScenario, TaskFailuresScenario)
+                        SmallTasksScenario, TaskFailuresScenario,
+                        LowCpuScenario, SchedulerDelayScenario, SlowSerializationScenario,
+                        RootCauseSkewScenario, RootCauseMemoryScenario,
+                        RootCauseInstabilityScenario)
       case key   =>
         scenarios.get(key) match {
           case Some(s) => Seq(s)
@@ -73,6 +82,12 @@ object SparkXDemo {
       .config("spark.sparkx.underPartitionRatio",     "0.5")
       // Allow 4 task failures so TaskFailuresScenario can retry and show failure counts
       .config("spark.task.maxFailures",              "4")
+      // Lowered thresholds for new detections
+      .config("spark.sparkx.lowCpuRatioThreshold",   "0.8")   // default 0.5 — flag anything < 80% CPU
+      .config("spark.sparkx.lowCpuMinRunTimeMs",     "5000")  // default 60000 — trigger on short stages
+      .config("spark.sparkx.highSchedulerDelayMs",   "50")    // default 500 — flag even 50ms delay
+      .config("spark.sparkx.schedulerDelayRatio",    "0.1")   // default 0.5 — flag 10% ratio
+      .config("spark.sparkx.resultSerializationMs",  "10")    // default 200 — flag even 10ms
       // Enable event logging so this run can be replayed in the History Server
       .config("spark.eventLog.enabled", "true")
       .config("spark.eventLog.dir",     eventsDir)
@@ -124,13 +139,14 @@ object SparkXDemo {
     println(s"  All scenarios complete.  Open the sparkx tab to see detected issues:")
     println()
     println(s"  Overview      → shows all flagged issues in one place")
+    println(s"  Root Cause    → groups correlated symptoms into actionable root causes")
     println(s"  Skew          → stages where max task >> median task duration")
     println(s"  GC            → stages / executors with high GC overhead")
     println(s"  Spill         → stages that overflowed shuffle buffers to disk")
     println(s"  Stragglers    → tasks that took far longer than their peers")
     println(s"  Broadcast     → broadcast variables exceeding the size threshold")
-    println(s"  Partitioning  → small tasks, under-partitioned stages, shuffle amplification")
-    println(s"  Stability     → task failures, speculative tasks, large results, fetch wait")
+    println(s"  Partitioning  → small tasks, under-partitioned, scheduler delay, low CPU")
+    println(s"  Stability     → failures, retries, speculative, serialization, memory skew")
     println()
     uiUrl.foreach(u => println(s"  URL: $u/sparkx"))
     println(line)

@@ -82,6 +82,22 @@ object IssueDetector {
             stage.shuffleWriteBytes / (1024 * 1024), ratio)
       }
 
+      // ── Phase 2: Low CPU utilization ────────────────────────────────────────
+      if (stage.executorRunTime >= config.lowCpuMinRunTimeMs && stage.executorCpuTime > 0) {
+        val cpuRatio = stage.executorCpuTime.toDouble / stage.executorRunTime.toDouble
+        if (cpuRatio < config.lowCpuRatioThreshold)
+          issues += LowCpuUtilizationIssue(sid, name, cpuRatio,
+            stage.executorCpuTime, stage.executorRunTime)
+      }
+
+      // ── Phase 2: Disk shuffle read (reader-side spill) ─────────────────────
+      val diskShuffleThreshold = config.diskShuffleReadMinMB * 1024L * 1024L
+      if (stage.shuffleReadBytes > 0) {
+        val remoteToDisk = stage.shuffleRemoteBytesReadToDisk
+        if (remoteToDisk >= diskShuffleThreshold)
+          issues += DiskShuffleReadIssue(sid, name, remoteToDisk, stage.shuffleReadBytes)
+      }
+
       store.taskSummary(stage.stageId, stage.attemptId, QUANTILES).foreach { dist =>
         val rt = dist.executorRunTime
         if (rt.length == QUANTILES.length) {
@@ -119,6 +135,18 @@ object IssueDetector {
         val p50RunTime   = dist.executorRunTime(Q_MED)
         if (p50RunTime > 0 && p50FetchWait / p50RunTime >= config.fetchWaitRatioThreshold)
           issues += HighFetchWaitIssue(sid, name, p50FetchWait / p50RunTime, p50FetchWait.toLong)
+
+        // ── Phase 2: High scheduler delay ───────────────────────────────────────
+        val p95SchedDelay = dist.schedulerDelay(Q_P95)
+        val p50Run        = dist.executorRunTime(Q_MED)
+        if (p95SchedDelay >= config.highSchedulerDelayMs &&
+            p50Run > 0 && p95SchedDelay / p50Run >= config.schedulerDelayRatio)
+          issues += HighSchedulerDelayIssue(sid, name, p95SchedDelay.toLong, p50Run.toLong, stage.numTasks)
+
+        // ── Phase 2: Slow result serialization ──────────────────────────────────
+        val p95ResultSer = dist.resultSerializationTime(Q_P95)
+        if (p95ResultSer >= config.resultSerializationMs)
+          issues += SlowResultSerializationIssue(sid, name, p95ResultSer.toLong, stage.numTasks)
       }
     }
 
@@ -141,6 +169,41 @@ object IssueDetector {
     store.rddList(cachedOnly = false).foreach { rdd =>
       if (rdd.name.startsWith("broadcast_") && rdd.memoryUsed >= broadcastThreshold)
         issues += BroadcastSizeIssue(rdd.name, rdd.memoryUsed / (1024 * 1024))
+    }
+
+    // ── Phase 2: Stage retries ────────────────────────────────────────────────
+    {
+      val allStatuses2 = Arrays.asList(StageStatus.COMPLETE, StageStatus.ACTIVE, StageStatus.FAILED)
+      val attemptCounts = scala.collection.mutable.LinkedHashMap[Int, (String, Int, Long, Int)]()
+      store.stageList(allStatuses2).foreach { s =>
+        val (_, currentCount, _, _) = attemptCounts.getOrElse(s.stageId, (s.name, 0, 0L, s.numTasks))
+        val avg = if (s.numCompleteTasks > 0) s.executorRunTime / s.numCompleteTasks else 0L
+        attemptCounts(s.stageId) = (s.name, currentCount + 1, avg.max(attemptCounts.get(s.stageId).map(_._3).getOrElse(0L)), s.numTasks)
+      }
+      attemptCounts.foreach { case (sid, (sname, count, avgMs, numTasks)) =>
+        if (count > 1)
+          issues += StageRetryIssue(Some(sid), sname, count - 1, avgMs, numTasks)
+      }
+    }
+
+    // ── Phase 2: Executor memory skew (app-wide) ─────────────────────────────
+    {
+      val executors = store.executorList(activeOnly = false).filter(_.isActive)
+      if (executors.length >= config.executorMemoryMinCount) {
+        val memValues = executors.flatMap(_.peakMemoryMetrics)
+          .map(_.getMetricValue("JVMHeapMemory")).filter(_ > 0)
+        if (memValues.length >= config.executorMemoryMinCount) {
+          val mean = memValues.sum.toDouble / memValues.length
+          if (mean > 0) {
+            val variance = memValues.map(v => math.pow(v - mean, 2)).sum / memValues.length
+            val cov = math.sqrt(variance) / mean
+            val maxMB = memValues.max / (1024 * 1024)
+            val minMB = memValues.min / (1024 * 1024)
+            if (cov >= config.executorMemoryCov)
+              issues += ExecutorMemorySkewIssue(None, "(all stages)", maxMB, minMB, cov, memValues.length)
+          }
+        }
+      }
     }
 
     issues.toSeq
@@ -299,6 +362,80 @@ object IssueDetector {
         else None
       }
     }.sortBy(r => -(r._3 * r._4))
+  }
+
+  // ── Phase 2 per-page query methods ─────────────────────────────────────────
+
+  def lowCpuStages(store: AppStatusStore, config: SparkXConfig)
+      : Seq[(Int, String, Double, Long, Long)] = cached("lowCpuStages") {
+    store.stageList(activeAndComplete).flatMap { s =>
+      if (s.executorRunTime >= config.lowCpuMinRunTimeMs && s.executorCpuTime > 0) {
+        val ratio = s.executorCpuTime.toDouble / s.executorRunTime.toDouble
+        Some((s.stageId, s.name, ratio, s.executorCpuTime, s.executorRunTime))
+      } else None
+    }.sortBy(_._3)
+  }
+
+  def diskShuffleReadStages(store: AppStatusStore, config: SparkXConfig)
+      : Seq[(Int, String, Long, Long)] = cached("diskShuffleReadStages") {
+    val threshold = config.diskShuffleReadMinMB * 1024L * 1024L
+    store.stageList(activeAndComplete).flatMap { s =>
+      if (s.shuffleReadBytes > 0) {
+        val remoteToDisk = s.shuffleRemoteBytesReadToDisk
+        if (remoteToDisk >= threshold)
+          Some((s.stageId, s.name, remoteToDisk, s.shuffleReadBytes))
+        else None
+      } else None
+    }.sortBy(-_._3)
+  }
+
+  def highSchedulerDelayStages(store: AppStatusStore, config: SparkXConfig)
+      : Seq[(Int, String, Long, Long, Int)] = cached("highSchedulerDelayStages") {
+    store.stageList(activeAndComplete).flatMap { stage =>
+      store.taskSummary(stage.stageId, stage.attemptId, QUANTILES).flatMap { dist =>
+        val p95Delay = dist.schedulerDelay(Q_P95)
+        val p50Run   = dist.executorRunTime(Q_MED)
+        if (p95Delay >= config.highSchedulerDelayMs &&
+            p50Run > 0 && p95Delay / p50Run >= config.schedulerDelayRatio)
+          Some((stage.stageId, stage.name, p95Delay.toLong, p50Run.toLong, stage.numTasks))
+        else None
+      }
+    }.sortBy(-_._3)
+  }
+
+  def stageRetries(store: AppStatusStore)
+      : Seq[(Int, String, Int, Long, Int)] = cached("stageRetries") {
+    val allStatuses = Arrays.asList(StageStatus.COMPLETE, StageStatus.ACTIVE, StageStatus.FAILED)
+    val attemptData = scala.collection.mutable.LinkedHashMap[Int, (String, Int, Long, Int)]()
+    store.stageList(allStatuses).foreach { s =>
+      val (_, count, prevAvg, _) = attemptData.getOrElse(s.stageId, (s.name, 0, 0L, s.numTasks))
+      val avg = if (s.numCompleteTasks > 0) s.executorRunTime / s.numCompleteTasks else 0L
+      attemptData(s.stageId) = (s.name, count + 1, avg.max(prevAvg), s.numTasks)
+    }
+    attemptData.filter(_._2._2 > 1).map { case (sid, (name, count, avgMs, numTasks)) =>
+      (sid, name, count - 1, avgMs, numTasks)
+    }.toSeq.sortBy(r => -(r._3.toLong * r._4 * r._5))
+  }
+
+  def slowResultSerStages(store: AppStatusStore, config: SparkXConfig)
+      : Seq[(Int, String, Long, Int)] = cached("slowResultSerStages") {
+    store.stageList(activeAndComplete).flatMap { stage =>
+      store.taskSummary(stage.stageId, stage.attemptId, QUANTILES).flatMap { dist =>
+        val p95Ser = dist.resultSerializationTime(Q_P95)
+        if (p95Ser >= config.resultSerializationMs)
+          Some((stage.stageId, stage.name, p95Ser.toLong, stage.numTasks))
+        else None
+      }
+    }.sortBy(-_._3)
+  }
+
+  def executorMemoryDistribution(store: AppStatusStore)
+      : Seq[(String, Long, Long)] = cached("executorMemoryDist") {
+    store.executorList(activeOnly = false).filter(_.isActive).flatMap { e =>
+      e.peakMemoryMetrics.map(_.getMetricValue("JVMHeapMemory")).filter(_ > 0).map { peak =>
+        (e.id, peak / (1024 * 1024), e.maxMemory / (1024 * 1024))
+      }
+    }.sortBy(-_._2)
   }
 
   // ── Cross-referencing helpers ───────────────────────────────────────────────

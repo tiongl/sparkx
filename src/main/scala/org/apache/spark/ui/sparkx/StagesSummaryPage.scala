@@ -142,6 +142,7 @@ class StagesSummaryPage(parent: SparkXTab) extends WebUIPage("stages") {
         }
       </div>
 
-    UIUtils.headerSparkPage(request, "sparkx — Stages with Savings Potential", content, parent)
+    UIUtils.headerSparkPage(request, "sparkx — Stages with Savings Potential",
+      SparkXPageUtils.subNavBar(request, "stages") ++ content, parent)
   }
 }

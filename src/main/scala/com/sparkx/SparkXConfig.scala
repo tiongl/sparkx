@@ -16,7 +16,16 @@ case class SparkXConfig(
   // Stability / task-health detections
   largeResultMB:           Long,    // P95 task result > N MB => large result
   fetchWaitRatioThreshold: Double,  // fetchWaitTime / runTime > N => network bottleneck
-  highDeserMs:             Long     // P95 task deserialize time > N ms
+  highDeserMs:             Long,    // P95 task deserialize time > N ms
+  // Phase 2 detections
+  lowCpuRatioThreshold:    Double,  // cpuTime / runTime < N => low CPU utilization
+  lowCpuMinRunTimeMs:      Long,    // minimum stage executor run time before flagging low CPU
+  diskShuffleReadMinMB:    Long,    // minimum remoteBytesReadToDisk before flagging
+  highSchedulerDelayMs:    Long,    // P95 scheduler delay > N ms
+  schedulerDelayRatio:     Double,  // P95 scheduler delay / P50 run time > N
+  resultSerializationMs:   Long,    // P95 result serialization time > N ms
+  executorMemoryCov:       Double,  // coefficient of variation threshold for memory skew
+  executorMemoryMinCount:  Int      // minimum executor count before flagging memory skew
 )
 
 object SparkXConfig {
@@ -31,6 +40,14 @@ object SparkXConfig {
   val LARGE_RESULT_MB          = "spark.sparkx.largeResultMB"
   val FETCH_WAIT_RATIO         = "spark.sparkx.fetchWaitRatioThreshold"
   val HIGH_DESER_MS            = "spark.sparkx.highDeserMs"
+  val LOW_CPU_RATIO            = "spark.sparkx.lowCpuRatioThreshold"
+  val LOW_CPU_MIN_RUNTIME_MS   = "spark.sparkx.lowCpuMinRunTimeMs"
+  val DISK_SHUFFLE_READ_MIN_MB = "spark.sparkx.diskShuffleReadMinMB"
+  val HIGH_SCHEDULER_DELAY_MS  = "spark.sparkx.highSchedulerDelayMs"
+  val SCHEDULER_DELAY_RATIO    = "spark.sparkx.schedulerDelayRatio"
+  val RESULT_SERIALIZATION_MS  = "spark.sparkx.resultSerializationMs"
+  val EXECUTOR_MEMORY_COV      = "spark.sparkx.executorMemoryCov"
+  val EXECUTOR_MEMORY_MIN_COUNT = "spark.sparkx.executorMemoryMinCount"
 
   def fromConf(conf: SparkConf): SparkXConfig = SparkXConfig(
     skewMultiplier          = conf.getDouble(SKEW_MULTIPLIER, 3.0),
@@ -43,6 +60,14 @@ object SparkXConfig {
     shuffleAmplifyRatio     = conf.getDouble(SHUFFLE_AMPLIFY_RATIO, 5.0),
     largeResultMB           = conf.getLong(LARGE_RESULT_MB, 50L),
     fetchWaitRatioThreshold = conf.getDouble(FETCH_WAIT_RATIO, 0.2),
-    highDeserMs             = conf.getLong(HIGH_DESER_MS, 200L)
+    highDeserMs             = conf.getLong(HIGH_DESER_MS, 200L),
+    lowCpuRatioThreshold    = conf.getDouble(LOW_CPU_RATIO, 0.5),
+    lowCpuMinRunTimeMs      = conf.getLong(LOW_CPU_MIN_RUNTIME_MS, 60000L),
+    diskShuffleReadMinMB    = conf.getLong(DISK_SHUFFLE_READ_MIN_MB, 100L),
+    highSchedulerDelayMs    = conf.getLong(HIGH_SCHEDULER_DELAY_MS, 500L),
+    schedulerDelayRatio     = conf.getDouble(SCHEDULER_DELAY_RATIO, 0.5),
+    resultSerializationMs   = conf.getLong(RESULT_SERIALIZATION_MS, 200L),
+    executorMemoryCov       = conf.getDouble(EXECUTOR_MEMORY_COV, 0.5),
+    executorMemoryMinCount  = conf.getInt(EXECUTOR_MEMORY_MIN_COUNT, 3)
   )
 }

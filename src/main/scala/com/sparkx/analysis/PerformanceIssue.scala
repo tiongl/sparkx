@@ -234,8 +234,116 @@ case class HighDeserializationIssue(
   val description =
     s"Stage '$stageName' tasks take up to ~${Utils.formatDuration(p95DeserMs)} to deserialize (P95). " +
     s"Large task closures or complex broadcast variables are common causes."
-  // Total compute wasted on deserializing tasks that don't need such large payloads
   val estimatedSavingsMs: Option[Long] = Some((p95DeserMs * numTasks).max(0))
   val savingsType = "Compute"
+}
+
+// ── New detections (phase 2) ──────────────────────────────────────────────────
+
+case class LowCpuUtilizationIssue(
+  stageId:      Option[Int],
+  stageName:    String,
+  cpuRatio:     Double,
+  cpuTimeMs:    Long,
+  runTimeMs:    Long
+) extends PerformanceIssue {
+  val severity   = if (cpuRatio < 0.25) Critical else Warning
+  val detailPath = "partitioning"
+  val title      = "Low CPU Utilization"
+  val description =
+    s"Stage '$stageName' uses only ${f"${cpuRatio * 100}%.1f"}% CPU " +
+    s"(${Utils.formatDuration(cpuTimeMs)} CPU / ${Utils.formatDuration(runTimeMs)} run). " +
+    s"Tasks may be I/O-bound, lock-contended, or waiting on external systems."
+  val estimatedSavingsMs: Option[Long] = Some((runTimeMs - cpuTimeMs).max(0))
+  val savingsType = "Compute"
+}
+
+case class DiskShuffleReadIssue(
+  stageId:              Option[Int],
+  stageName:            String,
+  remoteBytesReadToDisk: Long,
+  totalShuffleReadBytes: Long
+) extends PerformanceIssue {
+  val severity   = Warning
+  val detailPath = "spill"
+  val title      = "Disk Shuffle Read"
+  val description =
+    s"Stage '$stageName' fetched ${Utils.formatBytes(remoteBytesReadToDisk)} of shuffle data to disk " +
+    s"(out of ${Utils.formatBytes(totalShuffleReadBytes)} total). " +
+    s"Reduce partition size or increase executor memory."
+  val estimatedSavingsMs: Option[Long] =
+    Some((remoteBytesReadToDisk * 2L / (50L * 1024 * 1024) * 1000).max(0))
+  val savingsType = "I/O"
+}
+
+case class HighSchedulerDelayIssue(
+  stageId:       Option[Int],
+  stageName:     String,
+  p95DelayMs:    Long,
+  p50RunTimeMs:  Long,
+  numTasks:      Int
+) extends PerformanceIssue {
+  val severity   = Warning
+  val detailPath = "partitioning"
+  val title      = "High Scheduler Delay"
+  val description =
+    s"Stage '$stageName' tasks wait up to ~${Utils.formatDuration(p95DelayMs)} (P95) to be scheduled " +
+    s"vs ${Utils.formatDuration(p50RunTimeMs)} median run time. " +
+    s"Indicates resource contention or overloaded cluster."
+  val estimatedSavingsMs: Option[Long] = Some((p95DelayMs * numTasks).max(0))
+  val savingsType = "Scheduling overhead"
+}
+
+case class StageRetryIssue(
+  stageId:      Option[Int],
+  stageName:    String,
+  numAttempts:  Int,
+  avgTaskMs:    Long,
+  numTasks:     Int
+) extends PerformanceIssue {
+  val severity   = Critical
+  val detailPath = "stability"
+  val title      = "Stage Retry"
+  val description =
+    s"Stage '$stageName' was retried $numAttempts time(s). " +
+    s"Each retry re-runs all ${numTasks} tasks, wasting significant compute."
+  // Each retry re-runs all tasks
+  val estimatedSavingsMs: Option[Long] = Some((numAttempts.toLong * numTasks * avgTaskMs).max(0))
+  val savingsType = "Compute"
+}
+
+case class SlowResultSerializationIssue(
+  stageId:       Option[Int],
+  stageName:     String,
+  p95SerMs:      Long,
+  numTasks:      Int
+) extends PerformanceIssue {
+  val severity   = Warning
+  val detailPath = "stability"
+  val title      = "Slow Result Serialization"
+  val description =
+    s"Stage '$stageName' tasks take up to ~${Utils.formatDuration(p95SerMs)} (P95) to serialize results. " +
+    s"Reduce result size or use more efficient serialization."
+  val estimatedSavingsMs: Option[Long] = Some((p95SerMs * numTasks).max(0))
+  val savingsType = "Compute"
+}
+
+case class ExecutorMemorySkewIssue(
+  stageId:     Option[Int],
+  stageName:   String,
+  maxMemoryMB: Long,
+  minMemoryMB: Long,
+  cov:         Double,
+  numExecutors: Int
+) extends PerformanceIssue {
+  val severity   = Warning
+  val detailPath = "stability"
+  val title      = "Executor Memory Skew"
+  val description =
+    s"Stage '$stageName' has uneven executor memory: " +
+    s"${maxMemoryMB} MB max vs ${minMemoryMB} MB min across $numExecutors executors " +
+    s"(CoV: ${f"$cov%.2f"}). Suggests uneven partition sizes."
+  val estimatedSavingsMs: Option[Long] = None
+  val savingsType                      = ""
 }
 

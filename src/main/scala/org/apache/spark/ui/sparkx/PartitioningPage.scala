@@ -132,8 +132,95 @@ class PartitioningPage(parent: SparkXTab) extends WebUIPage("partitioning") {
             </tbody>
           </table>
         }
+
+        <h4>High Scheduler Delay</h4>
+        <p>
+          Stages where the P95 scheduler delay exceeds
+          <strong>{parent.config.highSchedulerDelayMs} ms</strong> and is more than
+          <strong>{f"${parent.config.schedulerDelayRatio * 100}%.0f"}%</strong> of median task run time.
+          Tasks are waiting a long time to be assigned to an executor, indicating cluster
+          resource contention or insufficient executors.
+        </p>
+        <p style="font-size:12px;color:#888">
+          🔄 <strong>Est. Savings</strong> = P95 scheduler delay × number of tasks (total scheduling overhead).
+        </p>
+        {val schedDelayStages = IssueDetector.highSchedulerDelayStages(parent.sparkUI.store, parent.config)
+        if (schedDelayStages.isEmpty)
+          <div class="alert alert-success">No high scheduler delays detected.</div>
+        else
+          <table class="table table-bordered table-condensed table-striped sortable">
+            <thead>
+              <tr>
+                <th>Stage ID</th><th>Job</th><th>Stage Name</th>
+                <th>P95 Sched Delay</th><th>P50 Run Time</th><th>Delay / Run</th>
+                <th>Tasks</th><th>🔄 Est. Savings</th><th>DAG</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedDelayStages.map { case (stageId, name, delayMs, runMs, numTasks) =>
+                val ratio   = if (runMs > 0) delayMs.toDouble / runMs * 100 else 0.0
+                val savings = delayMs * numTasks
+                <tr class="warning">
+                  <td><a href={SparkXPageUtils.stageUrl(request, stageId)}>{stageId}</a></td>
+                  {SparkXPageUtils.jobTd(request, stageId, stageJobs)}
+                  <td>{name}</td>
+                  <td sorttable_customkey={delayMs.toString}><strong>{Utils.formatDuration(delayMs)}</strong></td>
+                  <td sorttable_customkey={runMs.toString}>{Utils.formatDuration(runMs)}</td>
+                  <td><span class="label label-warning">{f"$ratio%.0f"}%</span></td>
+                  <td>{numTasks}</td>
+                  <td sorttable_customkey={savings.toString}><strong>🔄 {Utils.formatDuration(savings)}</strong> <small style="color:#888">(scheduling)</small></td>
+                  {SparkXPageUtils.dagTd(request, stageId, stageSqlExec)}
+                </tr>
+              }}
+            </tbody>
+          </table>
+        }
+
+        <h4>Low CPU Utilization</h4>
+        <p>
+          Stages where executor CPU time is less than
+          <strong>{f"${parent.config.lowCpuRatioThreshold * 100}%.0f"}%</strong> of executor run time
+          (minimum <strong>{Utils.formatDuration(parent.config.lowCpuMinRunTimeMs)}</strong> run time).
+          Low CPU usage means tasks are spending time on I/O waits, lock contention, sleeping,
+          or waiting on external systems rather than computing.
+        </p>
+        <p style="font-size:12px;color:#888">
+          🔄 <strong>Est. Savings</strong> = run time − CPU time (total idle compute time).
+        </p>
+        {val cpuStages = IssueDetector.lowCpuStages(parent.sparkUI.store, parent.config)
+          .filter(_._3 < parent.config.lowCpuRatioThreshold)
+        if (cpuStages.isEmpty)
+          <div class="alert alert-success">No low CPU utilization stages detected.</div>
+        else
+          <table class="table table-bordered table-condensed table-striped sortable">
+            <thead>
+              <tr>
+                <th>Stage ID</th><th>Job</th><th>Stage Name</th>
+                <th>CPU Time</th><th>Run Time</th><th>CPU Ratio</th>
+                <th>🔄 Est. Savings</th><th>DAG</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cpuStages.map { case (stageId, name, ratio, cpuMs, runMs) =>
+                val cls     = if (ratio < 0.25) "danger" else "warning"
+                val savings = (runMs - cpuMs).max(0)
+                <tr class={cls}>
+                  <td><a href={SparkXPageUtils.stageUrl(request, stageId)}>{stageId}</a></td>
+                  {SparkXPageUtils.jobTd(request, stageId, stageJobs)}
+                  <td>{name}</td>
+                  <td sorttable_customkey={cpuMs.toString}>{Utils.formatDuration(cpuMs)}</td>
+                  <td sorttable_customkey={runMs.toString}>{Utils.formatDuration(runMs)}</td>
+                  <td><span class={s"label label-$cls"}>{f"${ratio * 100}%.1f"}%</span></td>
+                  <td sorttable_customkey={savings.toString}><strong>🔄 {Utils.formatDuration(savings)}</strong> <small style="color:#888">(compute)</small></td>
+                  {SparkXPageUtils.dagTd(request, stageId, stageSqlExec)}
+                </tr>
+              }}
+            </tbody>
+          </table>
+        }
       </div>
 
-    UIUtils.headerSparkPage(request, "sparkx — Partitioning Analysis", content, parent)
+    UIUtils.headerSparkPage(request, "sparkx — Partitioning Analysis",
+      SparkXPageUtils.subNavBar(request, "partitioning") ++ content, parent)
   }
 }

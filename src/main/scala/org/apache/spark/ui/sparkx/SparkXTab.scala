@@ -10,6 +10,7 @@ class SparkXTab(val sparkUI: SparkUI, val config: SparkXConfig)
   override val name = "sparkx"
 
   attachPage(new OverviewPage(this))
+  attachPage(new RootCausePage(this))
   attachPage(new StagesSummaryPage(this))
   attachPage(new SkewPage(this))
   attachPage(new GCPage(this))
