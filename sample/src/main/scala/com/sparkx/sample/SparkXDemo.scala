@@ -110,7 +110,15 @@ object SparkXDemo {
 
     if (pause) {
       println("\nPress ENTER to exit and shut down the Spark UI …")
-      scala.io.StdIn.readLine()
+      val line = try { scala.io.StdIn.readLine() } catch { case _: Exception => null }
+      if (line == null) {
+        println("  (stdin unavailable - press Ctrl+C to exit)")
+        val latch = new java.util.concurrent.CountDownLatch(1)
+        Runtime.getRuntime.addShutdownHook(new Thread {
+          override def run(): Unit = latch.countDown()
+        })
+        latch.await()
+      }
     }
 
     spark.stop()
