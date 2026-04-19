@@ -41,7 +41,8 @@ object SparkXDemo {
     "slowser"      -> SlowSerializationScenario,
     "rc-skew"      -> RootCauseSkewScenario,
     "rc-memory"    -> RootCauseMemoryScenario,
-    "rc-instability" -> RootCauseInstabilityScenario
+    "rc-instability" -> RootCauseInstabilityScenario,
+    "suggestions"    -> SuggestionScenario
   )
 
   def main(args: Array[String]): Unit = {
@@ -54,7 +55,8 @@ object SparkXDemo {
                         SmallTasksScenario, TaskFailuresScenario,
                         LowCpuScenario, SchedulerDelayScenario, SlowSerializationScenario,
                         RootCauseSkewScenario, RootCauseMemoryScenario,
-                        RootCauseInstabilityScenario)
+                        RootCauseInstabilityScenario,
+                        SuggestionScenario)
       case key   =>
         scenarios.get(key) match {
           case Some(s) => Seq(s)
@@ -88,6 +90,10 @@ object SparkXDemo {
       .config("spark.sparkx.highSchedulerDelayMs",   "50")    // default 500 — flag even 50ms delay
       .config("spark.sparkx.schedulerDelayRatio",    "0.1")   // default 0.5 — flag 10% ratio
       .config("spark.sparkx.resultSerializationMs",  "10")    // default 200 — flag even 10ms
+      // Suggestion thresholds lowered for demo
+      .config("spark.sparkx.suggestion.broadcastThresholdBytes", s"${200L * 1024 * 1024}")  // 200 MB — generous
+      .config("spark.sparkx.suggestion.excessiveShuffleCount",   "4")  // flag > 4 exchanges
+      .config("spark.sparkx.suggestion.collectLargeDataMinMB",   "1")  // flag even 1 MB collects for demo
       // Enable event logging so this run can be replayed in the History Server
       .config("spark.eventLog.enabled", "true")
       .config("spark.eventLog.dir",     eventsDir)
@@ -98,8 +104,8 @@ object SparkXDemo {
     val failures = toRun.flatMap { scenario =>
       try { scenario.execute(spark); None }
       catch {
-        case e: Exception =>
-          val msg = Option(e.getCause).getOrElse(e).getMessage
+        case e: Throwable =>
+          val msg = Option(e.getCause).map(_.getMessage).getOrElse(e.getMessage)
           println(s"\n  [WARN] Scenario '${scenario.name}' failed: $msg")
           println(s"  (Continuing to next scenario — you can still inspect completed stages in the UI)\n")
           Some(scenario.name -> msg)
@@ -155,6 +161,7 @@ object SparkXDemo {
     println(s"  Broadcast     → broadcast variables exceeding the size threshold")
     println(s"  Partitioning  → small tasks, under-partitioned, scheduler delay, low CPU")
     println(s"  Stability     → failures, retries, speculative, serialization, memory skew")
+    println(s"  Suggestions   → broadcast candidates, excessive shuffles, cartesian, format, AQE")
     println()
     uiUrl.foreach(u => println(s"  URL: $u/sparkx"))
     println(line)
