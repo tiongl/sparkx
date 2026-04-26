@@ -22,7 +22,7 @@ import org.apache.spark.sql.functions._
  */
 object SuggestionScenario extends Scenario {
   val name        = "Optimization Suggestions"
-  val description = "Triggers broadcast-candidate, excessive shuffle, suboptimal format, cartesian, repeated scan, and collect suggestions"
+  val description = "Triggers broadcast-candidate, excessive shuffle, suboptimal format, cartesian, repeated scan, collect, and shuffle partition tuning suggestions"
   val uiPath      = "Suggestions"
 
   def run(spark: SparkSession): Unit = {
@@ -130,6 +130,15 @@ object SuggestionScenario extends Scenario {
     bigCsv.createOrReplaceTempView("big_csv")
     val collected = spark.sql("SELECT * FROM big_csv").collect()
     println(s"  Collected ${collected.length} rows from large dataset (collect warning flagged).")
+
+    // ── 7. Shuffle partition tuning — default 200 partitions on tiny data ─
+    println("  Running aggregation with default 200 shuffle partitions on small data …")
+    spark.conf.set("spark.sql.shuffle.partitions", "200")
+    val tinyAgg = spark.range(1, 1001)
+      .withColumn("grp", ($"id" % 10).cast("string"))
+      .groupBy("grp").agg(sum("id").as("total"))
+      .collect()
+    println(s"  Aggregation returned ${tinyAgg.length} groups (shuffle partition tuning flagged).")
 
     // Cleanup temp CSV directories
     try {
