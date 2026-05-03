@@ -10,7 +10,7 @@
 #   ./run-demo.sh skew --pause             run scenario then hold the Spark UI open
 #   ./run-demo.sh history-server           start History Server to replay past runs
 #
-# Supported scenario names: skew | straggler | gc | spill | broadcast | all
+# Supported scenario names: skew | straggler | gc | spill | broadcast | suggestions | all
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail

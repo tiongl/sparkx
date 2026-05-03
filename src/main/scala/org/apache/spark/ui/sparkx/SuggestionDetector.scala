@@ -55,7 +55,10 @@ object SuggestionDetector {
         )
       }
     } catch {
-      case _: Throwable => Seq.empty
+      case e: Throwable =>
+        System.err.println(s"[sparkx] SuggestionDetector.detect failed: ${e.getClass.getName}: ${e.getMessage}")
+        e.printStackTrace(System.err)
+        Seq.empty
     }
   }
 

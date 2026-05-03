@@ -8,8 +8,9 @@ object SparkXPageUtils {
   /** Sub-navigation entries: (label, subPath) */
   private val subPages: Seq[(String, String)] = Seq(
     "Overview"   -> "",
-    "Root Cause" -> "rootcause",
-    "Stages"     -> "stages"
+    "Root Cause"   -> "rootcause",
+    "Stages"       -> "stages",
+    "Suggestions"  -> "suggestions"
   )
 
   /** Render the sparkx sub-navigation bar. `activeSubPath` is the current page's subPath. */

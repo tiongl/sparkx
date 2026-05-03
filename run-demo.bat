@@ -11,7 +11,7 @@ REM   run-demo.bat skew                     run only the data-skew scenario
 REM   run-demo.bat skew --pause             run scenario then hold the Spark UI open
 REM   run-demo.bat history-server           start History Server to replay past runs
 REM
-REM Supported scenario names: skew | straggler | gc | spill | broadcast | all
+REM Supported scenario names: skew | straggler | gc | spill | broadcast | suggestions | all
 REM ─────────────────────────────────────────────────────────────────────────────
 
 setlocal enabledelayedexpansion
@@ -127,6 +127,8 @@ echo ✓ winutils ready at: %WINUTILS_DIR%
 
 :winutils_ready
 set HADOOP_HOME=%WINUTILS_DIR%
+REM Add hadoop.dll to PATH so NativeIO works on Windows
+set PATH=%HADOOP_HOME%\bin;%PATH%
 
 REM ── 4. Branch on command ─────────────────────────────────────────────────────
 if /i "%1"=="history-server" goto history_server

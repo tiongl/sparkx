@@ -19,6 +19,7 @@ class SparkXTab(val sparkUI: SparkUI, val config: SparkXConfig)
   attachPage(new BroadcastPage(this))
   attachPage(new PartitioningPage(this))
   attachPage(new StabilityPage(this))
+  attachPage(new SuggestionsPage(this))
 }
 
 object SparkXTab {

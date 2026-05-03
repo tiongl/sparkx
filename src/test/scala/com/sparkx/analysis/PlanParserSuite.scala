@@ -147,6 +147,45 @@ class PlanParserSuite extends AnyFunSuite with Matchers {
     plan.exchangeCount shouldBe 1
   }
 
+  test("AQE plan format: Exchange with node ID is counted") {
+    val input =
+      """|AdaptiveSparkPlan (14)
+         |+- == Final Plan ==
+         |   * HashAggregate (8)
+         |   +- ShuffleQueryStage (7)
+         |      +- Exchange (6)
+         |         +- * HashAggregate (5)""".stripMargin
+    val plan = PlanParser.parse(input)
+    plan.hasAQE shouldBe true
+    plan.exchangeCount shouldBe 1
+  }
+
+  test("AQE plan format: SortMergeJoin with node ID is parsed") {
+    val input =
+      """|AdaptiveSparkPlan (18)
+         |+- == Final Plan ==
+         |   * SortMergeJoin (12)
+         |   :- ShuffleQueryStage (5)
+         |   +- ShuffleQueryStage (11)""".stripMargin
+    val plan = PlanParser.parse(input)
+    plan.joinNodes should have size 1
+    plan.joinNodes.head.joinType shouldBe "SortMergeJoin"
+  }
+
+  test("AQE plan format: FileScan in detailed section is parsed") {
+    val input =
+      """|AdaptiveSparkPlan (14)
+         |+- == Final Plan ==
+         |   * HashAggregate (8)
+         |   +- ShuffleQueryStage (7)
+         |
+         |(9) FileScan csv [id#0,name#1] DataFilters: [isnotnull(id#0)], PartitionFilters: [], PushedFilters: [IsNotNull(id)]""".stripMargin
+    val plan = PlanParser.parse(input)
+    plan.hasAQE shouldBe true
+    plan.scanNodes should have size 1
+    plan.scanNodes.head.format shouldBe "csv"
+  }
+
   test("plan without AdaptiveSparkPlan has hasAQE false") {
     val input = "+- Exchange hashpartitioning(id#5, 200)"
     val plan = PlanParser.parse(input)

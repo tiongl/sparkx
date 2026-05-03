@@ -28,6 +28,10 @@ object SuggestionScenario extends Scenario {
   def run(spark: SparkSession): Unit = {
     import spark.implicits._
 
+    // Disable AQE so the suggestion detector can identify optimization opportunities
+    // (AQE auto-fixes many of these at runtime, hiding them from static plan analysis)
+    spark.conf.set("spark.sql.adaptive.enabled", "false")
+
     val tmpDir = System.getProperty("java.io.tmpdir")
     val csvPath = s"$tmpDir/sparkx-suggestion-demo"
 
@@ -150,6 +154,9 @@ object SuggestionScenario extends Scenario {
         }
       }
     } catch { case _: Exception => }
+
+    // Restore AQE for subsequent scenarios
+    spark.conf.set("spark.sql.adaptive.enabled", "true")
 
     println("  All suggestion triggers complete — check sparkx → Suggestions tab.")
   }

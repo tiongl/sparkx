@@ -94,6 +94,8 @@ object SparkXDemo {
       .config("spark.sparkx.suggestion.broadcastThresholdBytes", s"${200L * 1024 * 1024}")  // 200 MB — generous
       .config("spark.sparkx.suggestion.excessiveShuffleCount",   "4")  // flag > 4 exchanges
       .config("spark.sparkx.suggestion.collectLargeDataMinMB",   "1")  // flag even 1 MB collects for demo
+      // Disable Hadoop native IO on Windows to avoid NativeIO$Windows.access0 errors
+      .config("spark.hadoop.io.native.lib.available", "false")
       // Enable event logging so this run can be replayed in the History Server
       .config("spark.eventLog.enabled", "true")
       .config("spark.eventLog.dir",     eventsDir)

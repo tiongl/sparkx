@@ -25,7 +25,12 @@ case class SparkXConfig(
   schedulerDelayRatio:     Double,  // P95 scheduler delay / P50 run time > N
   resultSerializationMs:   Long,    // P95 result serialization time > N ms
   executorMemoryCov:       Double,  // coefficient of variation threshold for memory skew
-  executorMemoryMinCount:  Int      // minimum executor count before flagging memory skew
+  executorMemoryMinCount:  Int,     // minimum executor count before flagging memory skew
+  // Suggestion detections
+  broadcastThresholdBytes: Long,    // shuffle side < N bytes => broadcast candidate
+  excessiveShuffleCount:   Int,     // > N exchange nodes in one execution => flag
+  partitionPruneScanMinMB: Long,    // only flag missing partition pruning if scan > N MB
+  collectLargeDataMinMB:   Long     // flag collect when stage input > N MB
 )
 
 object SparkXConfig {
@@ -48,6 +53,11 @@ object SparkXConfig {
   val RESULT_SERIALIZATION_MS  = "spark.sparkx.resultSerializationMs"
   val EXECUTOR_MEMORY_COV      = "spark.sparkx.executorMemoryCov"
   val EXECUTOR_MEMORY_MIN_COUNT = "spark.sparkx.executorMemoryMinCount"
+  // Suggestion thresholds
+  val BROADCAST_THRESHOLD_BYTES = "spark.sparkx.suggestion.broadcastThresholdBytes"
+  val EXCESSIVE_SHUFFLE_COUNT   = "spark.sparkx.suggestion.excessiveShuffleCount"
+  val PARTITION_PRUNE_SCAN_MIN_MB = "spark.sparkx.suggestion.partitionPruneScanMinMB"
+  val COLLECT_LARGE_DATA_MIN_MB  = "spark.sparkx.suggestion.collectLargeDataMinMB"
 
   def fromConf(conf: SparkConf): SparkXConfig = SparkXConfig(
     skewMultiplier          = conf.getDouble(SKEW_MULTIPLIER, 3.0),
@@ -68,6 +78,10 @@ object SparkXConfig {
     schedulerDelayRatio     = conf.getDouble(SCHEDULER_DELAY_RATIO, 0.5),
     resultSerializationMs   = conf.getLong(RESULT_SERIALIZATION_MS, 200L),
     executorMemoryCov       = conf.getDouble(EXECUTOR_MEMORY_COV, 0.5),
-    executorMemoryMinCount  = conf.getInt(EXECUTOR_MEMORY_MIN_COUNT, 3)
+    executorMemoryMinCount  = conf.getInt(EXECUTOR_MEMORY_MIN_COUNT, 3),
+    broadcastThresholdBytes = conf.getLong(BROADCAST_THRESHOLD_BYTES, 100L * 1024 * 1024),
+    excessiveShuffleCount   = conf.getInt(EXCESSIVE_SHUFFLE_COUNT, 4),
+    partitionPruneScanMinMB = conf.getLong(PARTITION_PRUNE_SCAN_MIN_MB, 1024L),
+    collectLargeDataMinMB   = conf.getLong(COLLECT_LARGE_DATA_MIN_MB, 100L)
   )
 }

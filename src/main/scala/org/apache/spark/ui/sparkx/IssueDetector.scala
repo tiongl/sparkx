@@ -445,6 +445,10 @@ object IssueDetector {
     store.jobsList(null).flatMap(j => j.stageIds.map(sid => sid -> j.jobId)).toMap
   }
 
+  /** Optimization suggestions from SQL physical plan analysis. */
+  def suggestions(store: AppStatusStore, config: SparkXConfig): Seq[com.sparkx.analysis.OptimizationSuggestion] =
+    SuggestionDetector.detect(store, config)
+
   /** Stage ID → SQL execution ID (for DAG link). Gracefully empty if Spark SQL is absent. */
   def stageSqlExecMap(store: AppStatusStore): Map[Int, Long] = cached("stageSqlExecMap") {
     try {
