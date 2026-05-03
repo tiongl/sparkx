@@ -220,7 +220,7 @@ class PartitioningPage(parent: SparkXTab) extends WebUIPage("partitioning") {
         }
       </div>
 
-    UIUtils.headerSparkPage(request, "sparkx — Partitioning Analysis",
+    UIUtils.headerSparkPage(request, "SparkX — Partitioning Analysis",
       SparkXPageUtils.subNavBar(request, "partitioning") ++ content, parent)
   }
 }

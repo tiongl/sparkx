@@ -136,7 +136,7 @@ class RootCausePage(parent: SparkXTab) extends WebUIPage("rootcause") {
         }
       </div>
 
-    UIUtils.headerSparkPage(request, "sparkx — Root Cause Analysis",
+    UIUtils.headerSparkPage(request, "SparkX — Root Cause Analysis",
       SparkXPageUtils.subNavBar(request, "rootcause") ++ content, parent)
   }
 }

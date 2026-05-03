@@ -58,7 +58,7 @@ class SkewPage(parent: SparkXTab) extends WebUIPage("skew") {
         }
       </div>
 
-    UIUtils.headerSparkPage(request, "sparkx — Data Skew Analysis",
+    UIUtils.headerSparkPage(request, "SparkX — Data Skew Analysis",
       SparkXPageUtils.subNavBar(request, "skew") ++ content, parent)
   }
 }

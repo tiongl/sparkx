@@ -61,7 +61,7 @@ class SuggestionsPage(parent: SparkXTab) extends WebUIPage("suggestions") {
       </div>
     }
 
-    UIUtils.headerSparkPage(request, "sparkx — Optimization Suggestions",
+    UIUtils.headerSparkPage(request, "SparkX — Optimization Suggestions",
       SparkXPageUtils.subNavBar(request, "suggestions") ++ content, parent)
   }
 }

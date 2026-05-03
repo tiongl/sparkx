@@ -86,7 +86,7 @@ class GCPage(parent: SparkXTab) extends WebUIPage("gc") {
         </table>
       </div>
 
-    UIUtils.headerSparkPage(request, "sparkx — GC Pressure Analysis",
+    UIUtils.headerSparkPage(request, "SparkX — GC Pressure Analysis",
       SparkXPageUtils.subNavBar(request, "gc") ++ content, parent)
   }
 }

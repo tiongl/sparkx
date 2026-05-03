@@ -312,7 +312,7 @@ class StabilityPage(parent: SparkXTab) extends WebUIPage("stability") {
         }
       </div>
 
-    UIUtils.headerSparkPage(request, "sparkx — Task Stability Analysis",
+    UIUtils.headerSparkPage(request, "SparkX — Task Stability Analysis",
       SparkXPageUtils.subNavBar(request, "stability") ++ content, parent)
   }
 }

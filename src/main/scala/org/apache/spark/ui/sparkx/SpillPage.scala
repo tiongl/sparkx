@@ -90,7 +90,7 @@ class SpillPage(parent: SparkXTab) extends WebUIPage("spill") {
         }
       </div>
 
-    UIUtils.headerSparkPage(request, "sparkx — Shuffle Spill Analysis",
+    UIUtils.headerSparkPage(request, "SparkX — Shuffle Spill Analysis",
       SparkXPageUtils.subNavBar(request, "spill") ++ content, parent)
   }
 }

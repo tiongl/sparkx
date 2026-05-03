@@ -37,7 +37,7 @@ class BroadcastPage(parent: SparkXTab) extends WebUIPage("broadcast") {
         }
       </div>
 
-    UIUtils.headerSparkPage(request, "sparkx — Broadcast Size Analysis",
+    UIUtils.headerSparkPage(request, "SparkX — Broadcast Size Analysis",
       SparkXPageUtils.subNavBar(request, "broadcast") ++ content, parent)
   }
 }

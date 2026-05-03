@@ -61,7 +61,7 @@ class StagesSummaryPage(parent: SparkXTab) extends WebUIPage("stages") {
     val content =
       <div>
         <p>
-          Every stage that sparkx has flagged, ranked by <strong>estimated total savings</strong>.
+          Every stage that SparkX has flagged, ranked by <strong>estimated total savings</strong>.
           Fix higher-ranked stages first for the biggest impact.
         </p>
         <p style="font-size:12px;color:#888">
@@ -142,7 +142,7 @@ class StagesSummaryPage(parent: SparkXTab) extends WebUIPage("stages") {
         }
       </div>
 
-    UIUtils.headerSparkPage(request, "sparkx — Stages with Savings Potential",
+    UIUtils.headerSparkPage(request, "SparkX — Stages with Savings Potential",
       SparkXPageUtils.subNavBar(request, "stages") ++ content, parent)
   }
 }

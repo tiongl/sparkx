@@ -137,7 +137,7 @@ class OverviewPage(parent: SparkXTab) extends WebUIPage("") {
       </div>
     }
 
-    UIUtils.headerSparkPage(request, "sparkx — Performance Analysis",
+    UIUtils.headerSparkPage(request, "SparkX — Performance Analysis",
       SparkXPageUtils.subNavBar(request, "") ++ content, parent)
   }
 }

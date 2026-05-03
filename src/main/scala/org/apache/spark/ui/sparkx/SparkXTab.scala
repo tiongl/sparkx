@@ -7,7 +7,7 @@ import org.apache.spark.ui.{SparkUI, SparkUITab}
 class SparkXTab(val sparkUI: SparkUI, val config: SparkXConfig)
     extends SparkUITab(sparkUI, "sparkx") {
 
-  override val name = "sparkx"
+  override val name = "SparkX"
 
   attachPage(new OverviewPage(this))
   attachPage(new RootCausePage(this))
