@@ -1,8 +1,8 @@
-# sparkx Integration Guide
+# SparkX Integration Guide
 
-This guide covers how to deploy sparkx across different Spark environments — per-job, per-workspace, or globally.
+This guide covers how to deploy SparkX across different Spark environments — per-job, per-workspace, or globally.
 
-sparkx requires **two things** to work:
+SparkX requires **two things** to work:
 1. The `sparkx-assembly-0.1.0.jar` on the classpath
 2. `spark.extraListeners=com.sparkx.SparkXListener` for live apps (History Server uses SPI auto-discovery)
 
@@ -12,7 +12,7 @@ sparkx requires **two things** to work:
 
 ### Per-Job (Synapse Notebook / Pipeline)
 
-Add sparkx to a single notebook or pipeline activity:
+Add SparkX to a single notebook or pipeline activity:
 
 ```python
 %%configure
@@ -30,7 +30,7 @@ Or in a pipeline Spark activity, set these under **Spark configuration → Addit
 
 ### Per-Pool (Synapse Spark Pool)
 
-Apply sparkx to all jobs running on a Spark pool:
+Apply SparkX to all jobs running on a Spark pool:
 
 1. Upload `sparkx-assembly-0.1.0.jar` to your linked ADLS Gen2 storage or workspace packages
 2. Go to **Synapse Studio → Manage → Apache Spark pools → [your pool] → Packages**
@@ -39,7 +39,7 @@ Apply sparkx to all jobs running on a Spark pool:
    ```
    spark.extraListeners    com.sparkx.SparkXListener
    ```
-5. All notebooks and jobs on that pool will now have sparkx enabled
+5. All notebooks and jobs on that pool will now have SparkX enabled
 
 ### Per-Workspace (Synapse)
 
@@ -50,11 +50,11 @@ Apply sparkx to all jobs running on a Spark pool:
    spark.extraListeners    com.sparkx.SparkXListener
    ```
 3. Attach this configuration to all Spark pools in the workspace
-4. Every Spark session in the workspace will load sparkx
+4. Every Spark session in the workspace will load SparkX
 
 ### Viewing the UI
 
-- **Live session**: In Synapse Studio, open a running notebook → click **Monitor → Spark application → Spark UI** → click the **sparkx** tab
+- **Live session**: In Synapse Studio, open a running notebook → click **Monitor → Spark application → Spark UI** → click the **SparkX** tab
 - **Completed jobs**: Go to **Monitor → Apache Spark applications → [app] → Spark UI** (uses Spark History Server internally)
 
 ---
@@ -95,13 +95,13 @@ Fabric uses **Environments** to manage libraries and Spark configuration:
 ### Per-Workspace (Global Default)
 
 1. Go to **Workspace settings → Data Engineering/Science → Spark settings**
-2. Under **Environment**, set your sparkx-enabled environment as the **default environment**
-3. All notebooks and Spark jobs in the workspace will inherit sparkx automatically
+2. Under **Environment**, set your SparkX-enabled environment as the **default environment**
+3. All notebooks and Spark jobs in the workspace will inherit SparkX automatically
 
 ### Viewing the UI
 
-- **Running notebook**: Click the **Spark jobs** progress bar at the bottom of a running cell → **View in Monitoring Hub → Spark UI** → **sparkx** tab
-- **Completed jobs**: **Monitoring Hub → [Spark application] → Spark UI** → **sparkx** tab
+- **Running notebook**: Click the **Spark jobs** progress bar at the bottom of a running cell → **View in Monitoring Hub → Spark UI** → **SparkX** tab
+- **Completed jobs**: **Monitoring Hub → [Spark application] → Spark UI** → **SparkX** tab
 
 ---
 
@@ -154,7 +154,7 @@ cp /dbfs/libs/sparkx-assembly-0.1.0.jar /databricks/jars/
 
 ### Viewing the UI
 
-- **Running cluster**: Cluster page → **Spark UI** tab → **sparkx** tab
+- **Running cluster**: Cluster page → **Spark UI** tab → **SparkX** tab
 - **Completed jobs**: Cluster page → **Spark UI → Event logs** (if logging enabled)
 
 ---
@@ -187,7 +187,7 @@ spark-submit \
 
 ### History Server (Post-Hoc Analysis)
 
-The History Server discovers sparkx via SPI — just drop the JAR in `$SPARK_HOME/jars/` and restart:
+The History Server discovers SparkX via SPI — just drop the JAR in `$SPARK_HOME/jars/` and restart:
 
 ```bash
 cp sparkx-assembly-0.1.0.jar $SPARK_HOME/jars/
@@ -263,4 +263,4 @@ All thresholds work across all environments:
 | Microsoft Fabric | 3.4, 3.5 | ✅ | ✅ |
 | Databricks | 13.x+ (Spark 3.4+) | ✅ | ✅ |
 
-> **Note:** sparkx is compiled against Spark 3.5.0. It should work with any Spark 3.x release that exposes the `AppStatusStore` API. Older Spark 2.x is not supported.
+> **Note:** SparkX is compiled against Spark 3.5.0. It should work with any Spark 3.x release that exposes the `AppStatusStore` API. Older Spark 2.x is not supported.
