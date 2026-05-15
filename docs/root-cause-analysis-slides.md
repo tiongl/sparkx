@@ -10,15 +10,19 @@ SparkX groups **co-occurring symptoms** into unified **root-cause clusters**.
 Instead of showing 5 separate warnings, SparkX identifies the underlying problem
 and provides a single actionable recommendation.
 
-```
-Individual Symptoms              Root Cause Cluster
-┌──────────────────┐
-│   Data Skew      │─┐
-├──────────────────┤ │      ┌─────────────────────────────┐
-│ Straggler Tasks  │─┼─────▶│ Uneven Data Distribution    │
-├──────────────────┤ │      │ "Salt keys or enable AQE"   │
-│  Shuffle Spill   │─┘      └─────────────────────────────┘
-└──────────────────┘
+```mermaid
+flowchart LR
+    subgraph Symptoms
+        S1[Data Skew]
+        S2[Straggler Tasks]
+        S3[Shuffle Spill]
+    end
+    subgraph Root Cause
+        RC["🔍 Uneven Data Distribution<br/><i>Salt keys or enable AQE</i>"]
+    end
+    S1 --> RC
+    S2 --> RC
+    S3 --> RC
 ```
 
 **Savings are aggregated conservatively** — `max` within a cluster to avoid double-counting.
@@ -34,27 +38,32 @@ one or two partitions become massive while the rest are tiny.
 
 ### Architecture Diagram
 
-```
-                          ┌───────────────┐
-                          │    Driver      │
-                          │  (job plan)    │
-                          └──────┬────────┘
-                                 │ schedule tasks
-               ┌─────────────────┼─────────────────┐
-               ▼                 ▼                  ▼
-        ┌─────────────┐  ┌─────────────┐   ┌─────────────┐
-        │ Executor 1   │  │ Executor 2   │   │ Executor 3   │
-        │              │  │              │   │              │
-        │ Partition A  │  │ Partition B  │   │ Partition C  │
-        │ ██████████   │  │ █            │   │ █            │
-        │ 95% of data  │  │ 3% of data   │   │ 2% of data   │
-        │              │  │              │   │              │
-        │ ⏱ 45 min     │  │ ⏱ 30 sec     │   │ ⏱ 20 sec     │
-        └─────────────┘  └─────────────┘   └─────────────┘
-              │                 │                  │
-              │            idle waiting         idle waiting
-              ▼                 ▼                  ▼
-        Stage completes when slowest task finishes: 45 min
+```mermaid
+flowchart TB
+    Driver["🖥️ Driver<br/>Schedules tasks"]
+
+    Driver --> E1 & E2 & E3
+
+    subgraph E1["Executor 1"]
+        P1["Partition A<br/>██████████<br/>95% of data<br/>⏱️ 45 min"]
+    end
+
+    subgraph E2["Executor 2"]
+        P2["Partition B<br/>█<br/>3% of data<br/>⏱️ 30 sec"]
+    end
+
+    subgraph E3["Executor 3"]
+        P3["Partition C<br/>█<br/>2% of data<br/>⏱️ 20 sec"]
+    end
+
+    E1 --> Done["Stage completes when<br/>slowest task finishes: 45 min"]
+    E2 -.->|idle 44.5 min| Done
+    E3 -.->|idle 44.7 min| Done
+
+    style P1 fill:#ff6b6b,color:#fff
+    style P2 fill:#51cf66,color:#fff
+    style P3 fill:#51cf66,color:#fff
+    style Done fill:#ffd43b,color:#000
 ```
 
 ### How It Manifests in Spark Stages
@@ -106,26 +115,22 @@ Data spills to disk, and GC cycles consume CPU time instead of doing useful work
 
 ### Architecture Diagram
 
-```
-        ┌─────────────────────────────────────┐
-        │           Executor JVM               │
-        │                                      │
-        │  ┌──────────────┐  ┌──────────────┐  │
-        │  │  Task Memory  │  │ Shuffle Buf  │  │
-        │  │  ████████████ │  │ ████████████ │  │
-        │  │  (full)       │  │ (full)       │  │
-        │  └──────┬───────┘  └──────┬───────┘  │
-        │         │ overflow         │ overflow  │
-        │         ▼                  ▼          │
-        │  ┌─────────────────────────────────┐  │
-        │  │         Disk Spill               │  │
-        │  │  Slow I/O: read/write/merge      │  │
-        │  │  ████████████████████████████    │  │
-        │  └─────────────────────────────────┘  │
-        │                                      │
-        │  GC Activity: ██████████░░ (60%)     │
-        │  Useful Work:  ░░░░░░░░░██ (40%)     │
-        └─────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph JVM["Executor JVM"]
+        direction TB
+        subgraph Heap["Heap Memory (Full)"]
+            TM["Task Memory<br/>████████████<br/>(full)"]
+            SB["Shuffle Buffers<br/>████████████<br/>(full)"]
+        end
+        Heap -->|overflow| Disk["💾 Disk Spill<br/>Slow I/O: read/write/merge<br/>████████████████"]
+        GC["♻️ GC Activity: 60%<br/>Useful Work: 40%"]
+    end
+
+    style TM fill:#ff6b6b,color:#fff
+    style SB fill:#ff6b6b,color:#fff
+    style Disk fill:#ffa94d,color:#000
+    style GC fill:#e03131,color:#fff
 ```
 
 ### How It Manifests in Spark Stages
@@ -180,26 +185,30 @@ overhead (launch, serialize closure, report result) that dominates actual work t
 
 ### Architecture Diagram
 
-```
-        ┌───────────────────────────────────────────┐
-        │                 Driver                     │
-        │                                            │
-        │  Task Queue: [t1][t2][t3]...[t5000]       │
-        │  Scheduler busy launching/tracking tasks   │
-        │  ⏱ Scheduling overhead: 500ms per task      │
-        └────────────────────┬──────────────────────┘
-                             │
-          ┌──────────────────┼──────────────────┐
-          ▼                  ▼                  ▼
-   ┌────────────┐    ┌────────────┐    ┌────────────┐
-   │ Executor 1  │    │ Executor 2  │    │ Executor 3  │
-   │             │    │             │    │             │
-   │ Task: 10ms  │    │ Task: 8ms   │    │ Task: 12ms  │
-   │ Sched: 500ms│    │ Sched: 500ms│    │ Sched: 500ms│
-   │             │    │             │    │             │
-   │ Efficiency: │    │ Efficiency: │    │ Efficiency: │
-   │    2%       │    │    1.6%     │    │    2.4%     │
-   └────────────┘    └────────────┘    └────────────┘
+```mermaid
+flowchart TB
+    subgraph Driver
+        Queue["Task Queue<br/>[t1] [t2] [t3] ... [t5000]<br/>Scheduling overhead: 500ms/task"]
+    end
+
+    Driver --> E1 & E2 & E3
+
+    subgraph E1["Executor 1"]
+        T1["Task: 10ms work<br/>Sched: 500ms overhead<br/>─────────────<br/>Efficiency: 2%"]
+    end
+
+    subgraph E2["Executor 2"]
+        T2["Task: 8ms work<br/>Sched: 500ms overhead<br/>─────────────<br/>Efficiency: 1.6%"]
+    end
+
+    subgraph E3["Executor 3"]
+        T3["Task: 12ms work<br/>Sched: 500ms overhead<br/>─────────────<br/>Efficiency: 2.4%"]
+    end
+
+    style Queue fill:#ffd43b,color:#000
+    style T1 fill:#ff8787,color:#000
+    style T2 fill:#ff8787,color:#000
+    style T3 fill:#ff8787,color:#000
 ```
 
 ### How It Manifests in Spark Stages
@@ -245,24 +254,31 @@ while the rest sit idle, and individual tasks become very large and slow.
 
 ### Architecture Diagram
 
-```
-   Available Cluster: 100 cores across 10 executors
+```mermaid
+flowchart TB
+    Title["100 cores available across 10 executors<br/>Only 2 tasks running → 2% utilization"]
 
-   ┌────────────┐ ┌────────────┐ ┌────────────┐ ┌────────────┐
-   │ Executor 1  │ │ Executor 2  │ │ Executor 3  │ │ Executor 4  │
-   │ ██████████ │ │ ██████████ │ │ ░░░░░░░░░░ │ │ ░░░░░░░░░░ │
-   │ 100% busy  │ │ 100% busy  │ │ 0% — idle  │ │ 0% — idle  │
-   │ Task: 30min│ │ Task: 28min│ │  (no task)  │ │  (no task)  │
-   └────────────┘ └────────────┘ └────────────┘ └────────────┘
+    subgraph Active["Working"]
+        E1["Executor 1<br/>██████████<br/>100% busy<br/>⏱️ 30 min"]
+        E2["Executor 2<br/>██████████<br/>100% busy<br/>⏱️ 28 min"]
+    end
 
-   ┌────────────┐ ┌────────────┐ ┌────────────┐  ... (6 more idle)
-   │ Executor 5  │ │ Executor 6  │ │ Executor 7  │
-   │ ░░░░░░░░░░ │ │ ░░░░░░░░░░ │ │ ░░░░░░░░░░ │
-   │ 0% — idle  │ │ 0% — idle  │ │ 0% — idle  │
-   └────────────┘ └────────────┘ └────────────┘
+    subgraph Idle["Idle (wasted resources)"]
+        E3["Executor 3<br/>░░░░░░░░░░<br/>0% — no task"]
+        E4["Executor 4<br/>░░░░░░░░░░<br/>0% — no task"]
+        E5["Executor 5<br/>░░░░░░░░░░<br/>0% — no task"]
+        E6["... 5 more idle"]
+    end
 
-   Only 2 of 100 cores are working → 2% utilization
-   Stage takes 30 min instead of < 1 min with proper parallelism
+    Title --> Active & Idle
+
+    style E1 fill:#ff6b6b,color:#fff
+    style E2 fill:#ff6b6b,color:#fff
+    style E3 fill:#dee2e6,color:#666
+    style E4 fill:#dee2e6,color:#666
+    style E5 fill:#dee2e6,color:#666
+    style E6 fill:#dee2e6,color:#666
+    style Title fill:#fff3bf,color:#000
 ```
 
 ### How It Manifests in Spark Stages
@@ -308,22 +324,18 @@ in closures, or returning large results from tasks.
 
 ### Architecture Diagram
 
-```
-    ┌─────────────────┐                    ┌─────────────────┐
-    │     Driver       │   serialize        │    Executor      │
-    │                  │   closure          │                  │
-    │  Task closure    │──────────────────▶ │  Deserialize     │
-    │  + captured vars │   ⏱ 200ms          │  closure + vars  │
-    │  (large object!) │                    │  ⏱ 200ms          │
-    │                  │                    │                  │
-    │                  │   serialize        │  Actual work     │
-    │  Receive result  │◀──────────────────│  ⏱ 50ms           │
-    │  ⏱ 150ms         │   result           │                  │
-    │                  │   ⏱ 150ms          │  Serialize       │
-    └─────────────────┘                    │  result          │
-                                           │  ⏱ 150ms          │
-    Total per task: 550ms                  └─────────────────┘
-    Actual work:     50ms (9% efficiency!)
+```mermaid
+sequenceDiagram
+    participant D as 🖥️ Driver
+    participant E as ⚙️ Executor
+
+    D->>E: Serialize closure + captured vars (200ms)
+    Note over E: Deserialize closure (200ms)
+    Note over E: Actual work (50ms)
+    Note over E: Serialize result (150ms)
+    E->>D: Return result (150ms)
+
+    Note over D,E: Total: 750ms per task<br/>Useful work: 50ms (7% efficiency!)
 ```
 
 ### How It Manifests in Spark Stages
@@ -379,31 +391,33 @@ may launch duplicate tasks, consuming additional resources.
 
 ### Architecture Diagram
 
-```
-    ┌───────────────┐
-    │    Driver      │
-    │                │
-    │  Stage 3:      │
-    │  attempt 1 ✗   │──── retry ────┐
-    │  attempt 2 ✗   │──── retry ────┤
-    │  attempt 3 ✓   │               │
-    └───────┬───────┘               │
-            │                        │
-   ┌────────┴────────┐              │
-   ▼                 ▼              ▼
-┌──────────┐  ┌──────────┐  ┌──────────┐
-│Executor 1│  │Executor 2│  │Executor 3│
-│          │  │          │  │          │
-│ Task ✓   │  │ Task ✗   │  │ Task ✓   │
-│          │  │ OOM! ☠   │  │          │
-│ Specul.  │  │ Lost!    │  │ Retry of │
-│ task ✓   │  │          │  │ E2 task ✓│
-└──────────┘  └──────────┘  └──────────┘
-                  │
-                  ▼
-          Executor removed
-          Shuffle data lost
-          → Upstream recompute
+```mermaid
+flowchart TB
+    subgraph Driver
+        Stage["Stage 3<br/>Attempt 1 ✗ → Attempt 2 ✗ → Attempt 3 ✓"]
+    end
+
+    Driver --> E1 & E2 & E3
+
+    subgraph E1["Executor 1"]
+        T1["Task ✅<br/>+ Speculative task ✅"]
+    end
+
+    subgraph E2["Executor 2 ☠️"]
+        T2["Task ❌ OOM!<br/>Executor removed<br/>Shuffle data lost"]
+    end
+
+    subgraph E3["Executor 3"]
+        T3["Task ✅<br/>+ Retry of E2's task ✅"]
+    end
+
+    E2 -->|"shuffle data lost<br/>upstream recompute"| Recompute["⚠️ Upstream stages<br/>must re-run"]
+
+    style T2 fill:#ff6b6b,color:#fff
+    style T1 fill:#51cf66,color:#fff
+    style T3 fill:#51cf66,color:#fff
+    style Recompute fill:#ffa94d,color:#000
+    style Stage fill:#ffd43b,color:#000
 ```
 
 ### How It Manifests in Spark Stages
@@ -453,25 +467,37 @@ yarn logs -applicationId <app_id> | grep -i "No space left"
 
 ## Summary: Detection → Root Cause → Action
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     SparkX Detection Pipeline                    │
-│                                                                  │
-│  AppStatusStore ──▶ IssueDetector ──▶ 18 Performance Issues     │
-│                          │                                       │
-│                          ▼                                       │
-│                   RootCauseAnalyzer ──▶ 6 Root Cause Clusters   │
-│                          │                                       │
-│  SQLAppStatusStore ──▶ SuggestionDetector ──▶ 10 Suggestions    │
-│                          │                                       │
-│                          ▼                                       │
-│                    SparkX UI Pages                                │
-│                                                                  │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐   │
-│  │ Overview  │ │Root Cause│ │  Detail   │ │  Suggestions     │   │
-│  │ (summary) │ │ (groups) │ │ (per-page)│ │  (SQL plan)      │   │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Sources["Data Sources"]
+        AS["AppStatusStore<br/>(runtime metrics)"]
+        SS["SQLAppStatusStore<br/>(query plans)"]
+    end
+
+    subgraph Detection["Detection"]
+        ID["IssueDetector<br/>18 performance issues"]
+        SD["SuggestionDetector<br/>10 SQL suggestions"]
+    end
+
+    subgraph Analysis["Analysis"]
+        RCA["RootCauseAnalyzer<br/>6 root-cause clusters"]
+    end
+
+    subgraph UI["SparkX UI"]
+        OV["Overview"]
+        RC["Root Cause"]
+        DT["Detail Pages"]
+        SG["Suggestions"]
+    end
+
+    AS --> ID --> RCA --> OV & RC & DT
+    SS --> SD --> OV & SG
+
+    style AS fill:#74c0fc,color:#000
+    style SS fill:#74c0fc,color:#000
+    style ID fill:#b197fc,color:#000
+    style SD fill:#b197fc,color:#000
+    style RCA fill:#ffd43b,color:#000
 ```
 
 | Root Cause | Primary Signal | Key Fix | Config Tuning |
