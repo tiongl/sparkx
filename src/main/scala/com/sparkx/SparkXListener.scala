@@ -14,7 +14,18 @@ import org.apache.spark.scheduler.{SparkListener, SparkListenerApplicationStart}
 class SparkXListener(conf: SparkConf) extends SparkListener {
 
   override def onApplicationStart(event: SparkListenerApplicationStart): Unit = {
-    org.apache.spark.ui.sparkx.SparkXPluginBridge.registerForSparkContext(
-      org.apache.spark.SparkContext.getOrCreate(), conf)
+    val sc = org.apache.spark.SparkContext.getOrCreate()
+
+    // Register UI tab
+    org.apache.spark.ui.sparkx.SparkXPluginBridge.registerForSparkContext(sc, conf)
+
+    // Register resilient join strategy if enabled
+    val resilientEnabled = conf.getBoolean(
+      "spark.sparkx.resilientJoin.enabled", defaultValue = false)
+    if (resilientEnabled) {
+      val spark = org.apache.spark.sql.SparkSession.builder().getOrCreate()
+      spark.experimental.extraStrategies ++=
+        Seq(new org.apache.spark.sql.execution.sparkx.ResilientJoinStrategy())
+    }
   }
 }

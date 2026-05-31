@@ -22,6 +22,7 @@ lazy val root = (project in file("."))
       "org.apache.spark" %% "spark-sql"  % sparkVersion % "provided",
       "org.scalatest"    %% "scalatest"  % "3.2.17"     % "test"
     ),
+    Test / parallelExecution := false,
     assemblySettings
   )
 
