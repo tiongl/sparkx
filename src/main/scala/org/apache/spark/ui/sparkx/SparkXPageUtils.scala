@@ -10,7 +10,9 @@ object SparkXPageUtils {
     "Overview"   -> "",
     "Root Cause"   -> "rootcause",
     "Stages"       -> "stages",
-    "Suggestions"  -> "suggestions"
+    "Suggestions"  -> "suggestions",
+    "Config"       -> "config",
+    "Auto-Fix"     -> "autofix"
   )
 
   /** Render the sparkx sub-navigation bar. `activeSubPath` is the current page's subPath. */

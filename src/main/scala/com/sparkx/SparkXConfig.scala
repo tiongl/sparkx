@@ -30,8 +30,19 @@ case class SparkXConfig(
   broadcastThresholdBytes: Long,    // shuffle side < N bytes => broadcast candidate
   excessiveShuffleCount:   Int,     // > N exchange nodes in one execution => flag
   partitionPruneScanMinMB: Long,    // only flag missing partition pruning if scan > N MB
-  collectLargeDataMinMB:   Long     // flag collect when stage input > N MB
-)
+  collectLargeDataMinMB:   Long,    // flag collect when stage input > N MB
+  // Auto-fix (closed-loop SQL hint injection)
+  autofixEnabled:              Boolean, // master on/off switch for auto-fix
+  autofixMode:                 String,  // "auto" (learn+fix) | "learn" | "shadow" | "fix"
+  autofixStorePath:            String,  // where fix profiles are persisted
+  autofixMaxIterations:        Int,     // tuning attempts before locking in the best hints
+  autofixBroadcastMaxBytes:    Long,    // join side below this => try a BROADCAST hint
+  autofixTargetPartitionBytes: Long     // desired bytes per shuffle partition when tuning
+) {
+  def autofixLearnEnabled: Boolean = autofixEnabled
+  def autofixApplyEnabled: Boolean = autofixEnabled && (autofixMode == "auto" || autofixMode == "fix")
+  def autofixShadowEnabled: Boolean = autofixEnabled && autofixMode == "shadow"
+}
 
 object SparkXConfig {
   val SKEW_MULTIPLIER          = "spark.sparkx.skewMultiplier"
@@ -58,6 +69,16 @@ object SparkXConfig {
   val EXCESSIVE_SHUFFLE_COUNT   = "spark.sparkx.suggestion.excessiveShuffleCount"
   val PARTITION_PRUNE_SCAN_MIN_MB = "spark.sparkx.suggestion.partitionPruneScanMinMB"
   val COLLECT_LARGE_DATA_MIN_MB  = "spark.sparkx.suggestion.collectLargeDataMinMB"
+  // Auto-fix keys
+  val AUTOFIX_ENABLED               = "spark.sparkx.autofix.enabled"
+  val AUTOFIX_MODE                  = "spark.sparkx.autofix.mode"
+  val AUTOFIX_STORE_PATH            = "spark.sparkx.autofix.store.path"
+  val AUTOFIX_MAX_ITERATIONS        = "spark.sparkx.autofix.maxIterations"
+  val AUTOFIX_BROADCAST_MAX_BYTES   = "spark.sparkx.autofix.broadcastMaxBytes"
+  val AUTOFIX_TARGET_PARTITION_BYTES = "spark.sparkx.autofix.targetPartitionBytes"
+
+  private def defaultStorePath: String =
+    new java.io.File(System.getProperty("java.io.tmpdir"), "sparkx-autofix").toURI.toString
 
   def fromConf(conf: SparkConf): SparkXConfig = SparkXConfig(
     skewMultiplier          = conf.getDouble(SKEW_MULTIPLIER, 3.0),
@@ -82,6 +103,12 @@ object SparkXConfig {
     broadcastThresholdBytes = conf.getLong(BROADCAST_THRESHOLD_BYTES, 100L * 1024 * 1024),
     excessiveShuffleCount   = conf.getInt(EXCESSIVE_SHUFFLE_COUNT, 4),
     partitionPruneScanMinMB = conf.getLong(PARTITION_PRUNE_SCAN_MIN_MB, 1024L),
-    collectLargeDataMinMB   = conf.getLong(COLLECT_LARGE_DATA_MIN_MB, 100L)
+    collectLargeDataMinMB   = conf.getLong(COLLECT_LARGE_DATA_MIN_MB, 100L),
+    autofixEnabled              = conf.getBoolean(AUTOFIX_ENABLED, defaultValue = false),
+    autofixMode                 = conf.get(AUTOFIX_MODE, "auto"),
+    autofixStorePath            = conf.get(AUTOFIX_STORE_PATH, defaultStorePath),
+    autofixMaxIterations        = conf.getInt(AUTOFIX_MAX_ITERATIONS, 5),
+    autofixBroadcastMaxBytes    = conf.getLong(AUTOFIX_BROADCAST_MAX_BYTES, 10L * 1024 * 1024),
+    autofixTargetPartitionBytes = conf.getLong(AUTOFIX_TARGET_PARTITION_BYTES, 128L * 1024 * 1024)
   )
 }
