@@ -19,7 +19,8 @@ case class FixProfile(
   attempts:     Seq[FixAttempt],
   updatedTs:    Long,
   baselinePlan: Option[String] = None, // un-fixed plan (captured on the first, un-hinted run)
-  currentPlan:  Option[String] = None  // plan from the most recent run
+  currentPlan:  Option[String] = None, // plan from the most recent run
+  recommendations: Seq[Hint] = Nil     // advisory skew-resolution strategies (applied via DataFrame API)
 ) {
   def iterations: Int = attempts.size
 }

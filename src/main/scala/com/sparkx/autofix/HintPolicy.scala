@@ -28,6 +28,7 @@ object HintPolicy {
     maxIterations: Int
   ): FixProfile = {
     val now = System.currentTimeMillis()
+    val safeAdvice = advice.filterNot(_.advisory)
     val prevBest = profile.bestMs
     val improved = appliedHints.nonEmpty && prevBest.exists(b => durationMs < b * ImproveMargin)
 
@@ -42,7 +43,7 @@ object HintPolicy {
     val triedSets: Set[Set[String]] = attempts.map(renderedSet).toSet
     val next =
       if (attempts.size > maxIterations) None
-      else nextCandidate(bestHints, advice, triedSets)
+      else nextCandidate(bestHints, safeAdvice, triedSets)
 
     val (status, pending) = next match {
       case Some(cand) => (FixProfile.Optimizing, cand)

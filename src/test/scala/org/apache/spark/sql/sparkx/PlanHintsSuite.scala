@@ -2,7 +2,7 @@ package org.apache.spark.sql.sparkx
 
 import com.sparkx.autofix._
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
-import org.apache.spark.sql.catalyst.plans.Inner
+import org.apache.spark.sql.catalyst.plans.{Cross, Inner, LeftOuter}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.types.IntegerType
 import org.scalatest.funsuite.AnyFunSuite
@@ -80,5 +80,72 @@ class PlanHintsSuite extends AnyFunSuite with Matchers {
     val (stripped, hints) = PlanHints.strip(userRepartition)
     hints shouldBe empty
     stripped shouldBe theSameInstanceAs(userRepartition)
+  }
+
+  // ── Skew-resolution rewrites ────────────────────────────────────────────────
+
+  test("split-broadcast injects a union of N broadcast joins over hash-filtered chunks") {
+    val hinted = PlanHints.apply(join, Seq(SplitBroadcastHint("b", 3)))
+    PlanHints.hasInjected(hinted) shouldBe true
+    hinted shouldBe a[Union]
+    val u = hinted.asInstanceOf[Union]
+    u.children.size shouldBe 3
+    u.children.foreach { c =>
+      val j = c.asInstanceOf[Join]
+      j.hint.rightHint.flatMap(_.strategy) shouldBe Some(BROADCAST)
+      j.right shouldBe a[Filter]
+    }
+    // The rewrite preserves the original schema.
+    hinted.output.map(_.name) shouldBe join.output.map(_.name)
+  }
+
+  test("split-broadcast leaves unsupported (outer) joins untouched") {
+    val outer = Join(aliasA, aliasB, LeftOuter, Some(EqualTo(la, lb)), JoinHint.NONE)
+    val res = PlanHints.apply(outer, Seq(SplitBroadcastHint("b", 3)))
+    PlanHints.hasInjected(res) shouldBe false
+    res.asInstanceOf[Join].joinType shouldBe LeftOuter
+  }
+
+  test("salted join injects a top projection that preserves the original schema") {
+    val hinted = PlanHints.apply(join, Seq(SaltedJoinHint("b", 4)))
+    PlanHints.hasInjected(hinted) shouldBe true
+    hinted shouldBe a[Project]
+    hinted.output.map(_.name) shouldBe join.output.map(_.name)
+    // A 4-row salt-range local relation is cross-joined in to replicate the build side.
+    hinted.collectFirst { case lr: LocalRelation if lr.data.size == 4 => lr }.isDefined shouldBe true
+    hinted.collectFirst { case j: Join if j.joinType == Cross => j }.isDefined shouldBe true
+  }
+
+  test("salted join leaves non-inner joins untouched") {
+    val outer = Join(aliasA, aliasB, LeftOuter, Some(EqualTo(la, lb)), JoinHint.NONE)
+    val res = PlanHints.apply(outer, Seq(SaltedJoinHint("b", 4)))
+    PlanHints.hasInjected(res) shouldBe false
+  }
+
+  test("targeted salt injects a top projection over a Generate-replicated build side") {
+    val hinted = PlanHints.apply(join, Seq(TargetedSaltHint("b", 4, Seq("1", "7"))))
+    PlanHints.hasInjected(hinted) shouldBe true
+    hinted shouldBe a[Project]
+    hinted.output.map(_.name) shouldBe join.output.map(_.name)
+    // Build side is replicated via an explode Generate (hot keys only), not a Cross to a range.
+    hinted.collectFirst { case g: Generate => g }.isDefined shouldBe true
+    hinted.collectFirst { case j: Join if j.joinType == Cross => j }.isDefined shouldBe false
+  }
+
+  test("targeted salt is a no-op with empty hot keys or non-inner joins") {
+    PlanHints.hasInjected(PlanHints.apply(join, Seq(TargetedSaltHint("b", 4, Nil)))) shouldBe false
+    val outer = Join(aliasA, aliasB, LeftOuter, Some(EqualTo(la, lb)), JoinHint.NONE)
+    PlanHints.hasInjected(PlanHints.apply(outer, Seq(TargetedSaltHint("b", 4, Seq("1"))))) shouldBe false
+  }
+
+  test("stamped identity round-trips fingerprint and applied hints") {
+    val fp = PlanHints.fingerprintOf(join)
+    val hints = Seq(SplitBroadcastHint("b", 3))
+    val hinted = PlanHints.apply(join, hints)
+    PlanHints.stampIdentity(hinted, fp, hints)
+    val recovered = PlanHints.identityFrom(hinted)
+    recovered shouldBe defined
+    recovered.get._1 shouldBe fp
+    recovered.get._2 shouldBe hints
   }
 }

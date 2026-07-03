@@ -43,6 +43,19 @@ class FixProfileStoreSuite extends AnyFunSuite with Matchers {
     tempStore().load("nope") shouldBe None
   }
 
+  test("save then load round-trips advisory skew recommendations") {
+    val store = tempStore()
+    val profile = FixProfile.initial("cafe", "SELECT * FROM big JOIN big2 ON big.k = big2.k")
+      .copy(recommendations = Seq(SplitBroadcastHint("big", 4), SaltedJoinHint("big2", 16),
+        TargetedSaltHint("big2", 16, Seq("1", "42"))))
+    store.save(profile)
+
+    val loaded = store.load("cafe")
+    loaded shouldBe defined
+    loaded.get.recommendations shouldBe Seq(SplitBroadcastHint("big", 4), SaltedJoinHint("big2", 16),
+      TargetedSaltHint("big2", 16, Seq("1", "42")))
+  }
+
   test("list returns all saved profiles") {
     val store = tempStore()
     store.save(FixProfile.initial("aaa", "q1"))

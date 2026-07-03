@@ -25,7 +25,13 @@ class AutoFixRule(config: SparkXConfig, store: FixProfileStore) extends Rule[Log
       val fingerprint = PlanHints.fingerprintOf(plan)
       store.load(fingerprint) match {
         case Some(profile) if profile.pendingHints.nonEmpty =>
-          PlanHints.apply(plan, profile.pendingHints)
+          val fixed = PlanHints.apply(plan, profile.pendingHints)
+          if (fixed ne plan) {
+            // Stamp identity so the learner recovers the fingerprint + applied hints directly,
+            // rather than trying to structurally reverse complex skew rewrites via strip.
+            PlanHints.stampIdentity(fixed, fingerprint, profile.pendingHints)
+          }
+          fixed
         case _ => plan
       }
     } catch {

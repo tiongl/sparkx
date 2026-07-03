@@ -7,8 +7,9 @@ import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
 /**
  * The `spark.sql.extensions` entry point for auto-fix. It injects [[AutoFixRule]] as a
  * post-hoc resolution rule (so learned hints are applied to *any* resolved plan — SQL text
- * or DataFrame/Dataset API alike) and lazily registers an [[AutoFixLearner]] on the session
- * (so completed queries feed the learning loop).
+ * or DataFrame/Dataset API alike), injects [[SparkXHintRule]] as a resolution rule (so the
+ * sparkx skew pseudo-hints can be written directly in SQL text), and lazily registers an
+ * [[AutoFixLearner]] on the session (so completed queries feed the learning loop).
  *
  * Enable with:
  * {{{
@@ -18,6 +19,8 @@ import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
  */
 class SparkXAutoFixExtension extends (SparkSessionExtensions => Unit) {
   override def apply(ext: SparkSessionExtensions): Unit = {
+    // Resolve sparkx SQL pseudo-hints (SPLIT_BROADCAST / SALT) written in query text.
+    ext.injectResolutionRule(_ => new SparkXHintRule)
     ext.injectPostHocResolutionRule { session =>
       val config = SparkXConfig.fromConf(session.sparkContext.getConf)
       val store  = new FixProfileStore(config.autofixStorePath, session.sparkContext.hadoopConfiguration)

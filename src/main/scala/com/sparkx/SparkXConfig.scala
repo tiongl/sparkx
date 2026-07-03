@@ -37,7 +37,15 @@ case class SparkXConfig(
   autofixStorePath:            String,  // where fix profiles are persisted
   autofixMaxIterations:        Int,     // tuning attempts before locking in the best hints
   autofixBroadcastMaxBytes:    Long,    // join side below this => try a BROADCAST hint
-  autofixTargetPartitionBytes: Long     // desired bytes per shuffle partition when tuning
+  autofixTargetPartitionBytes: Long,    // desired bytes per shuffle partition when tuning
+  // Skew resolution (advisory: surfaced as DataFrame-API recommendations, not plan-injected)
+  autofixSkewFactor:           Double,  // join is skew-prone when max(side)/min(side) >= this (<=1 forces all joins)
+  autofixSkewBroadcastMaxBytes: Long,   // artificial ceiling: small side below this => "double broadcast" (split-broadcast) instead of salting
+  autofixSaltFactor:           Int,     // salt buckets recommended for a salted (AutoSaltJoin) skew fix
+  autofixSkewTargeted:         Boolean, // discover hot keys (sampling) and salt only those (targeted salting)
+  autofixSkewSampleFraction:   Double,  // fraction of the skewed side to sample when discovering hot keys
+  autofixSkewThresholdMult:    Double,  // a key is hot when its sampled freq >= median * this
+  autofixSkewMaxKeys:          Int      // cap on how many hot keys to salt
 ) {
   def autofixLearnEnabled: Boolean = autofixEnabled
   def autofixApplyEnabled: Boolean = autofixEnabled && (autofixMode == "auto" || autofixMode == "fix")
@@ -76,6 +84,13 @@ object SparkXConfig {
   val AUTOFIX_MAX_ITERATIONS        = "spark.sparkx.autofix.maxIterations"
   val AUTOFIX_BROADCAST_MAX_BYTES   = "spark.sparkx.autofix.broadcastMaxBytes"
   val AUTOFIX_TARGET_PARTITION_BYTES = "spark.sparkx.autofix.targetPartitionBytes"
+  val AUTOFIX_SKEW_FACTOR            = "spark.sparkx.autofix.skew.factor"
+  val AUTOFIX_SKEW_BROADCAST_MAX_BYTES = "spark.sparkx.autofix.skew.broadcastMaxBytes"
+  val AUTOFIX_SALT_FACTOR           = "spark.sparkx.autofix.skew.saltFactor"
+  val AUTOFIX_SKEW_TARGETED         = "spark.sparkx.autofix.skew.targeted"
+  val AUTOFIX_SKEW_SAMPLE_FRACTION  = "spark.sparkx.autofix.skew.sampleFraction"
+  val AUTOFIX_SKEW_THRESHOLD_MULT   = "spark.sparkx.autofix.skew.thresholdMultiplier"
+  val AUTOFIX_SKEW_MAX_KEYS         = "spark.sparkx.autofix.skew.maxKeys"
 
   private def defaultStorePath: String =
     new java.io.File(System.getProperty("java.io.tmpdir"), "sparkx-autofix").toURI.toString
@@ -109,6 +124,13 @@ object SparkXConfig {
     autofixStorePath            = conf.get(AUTOFIX_STORE_PATH, defaultStorePath),
     autofixMaxIterations        = conf.getInt(AUTOFIX_MAX_ITERATIONS, 5),
     autofixBroadcastMaxBytes    = conf.getLong(AUTOFIX_BROADCAST_MAX_BYTES, 10L * 1024 * 1024),
-    autofixTargetPartitionBytes = conf.getLong(AUTOFIX_TARGET_PARTITION_BYTES, 128L * 1024 * 1024)
+    autofixTargetPartitionBytes = conf.getLong(AUTOFIX_TARGET_PARTITION_BYTES, 128L * 1024 * 1024),
+    autofixSkewFactor            = conf.getDouble(AUTOFIX_SKEW_FACTOR, 10.0),
+    autofixSkewBroadcastMaxBytes = conf.getLong(AUTOFIX_SKEW_BROADCAST_MAX_BYTES, 100L * 1024 * 1024),
+    autofixSaltFactor            = conf.getInt(AUTOFIX_SALT_FACTOR, 16),
+    autofixSkewTargeted          = conf.getBoolean(AUTOFIX_SKEW_TARGETED, defaultValue = true),
+    autofixSkewSampleFraction    = conf.getDouble(AUTOFIX_SKEW_SAMPLE_FRACTION, 0.01),
+    autofixSkewThresholdMult     = conf.getDouble(AUTOFIX_SKEW_THRESHOLD_MULT, 10.0),
+    autofixSkewMaxKeys           = conf.getInt(AUTOFIX_SKEW_MAX_KEYS, 100)
   )
 }

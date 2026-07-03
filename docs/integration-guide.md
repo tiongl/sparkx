@@ -250,6 +250,12 @@ All thresholds work across all environments:
 | `spark.sparkx.executorMemoryCov` | `0.30` | Executor memory skew CoV threshold |
 | `spark.sparkx.executorMemoryMinCount` | `3` | Min executors for memory skew check |
 
+> **Optional: closed-loop auto-fix.** The read-only diagnostics above need only the
+> `spark.extraListeners` listener. To additionally have SparkX *learn and inject* performance hints,
+> register the separate extension (`spark.sql.extensions=org.apache.spark.sql.sparkx.SparkXAutoFixExtension`)
+> and set `spark.sparkx.autofix.enabled=true`. It works on every platform in the table below. See
+> **[autofix.md](autofix.md)** for setup, modes, and its configuration keys.
+
 ---
 
 ## Compatibility

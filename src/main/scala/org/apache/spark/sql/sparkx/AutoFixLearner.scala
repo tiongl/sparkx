@@ -21,14 +21,30 @@ class AutoFixLearner(config: SparkXConfig, store: FixProfileStore) extends Query
     if (!config.autofixLearnEnabled) return
     try {
       val analyzed = qe.analyzed
-      val fingerprint = PlanHints.fingerprintOf(analyzed)
+      // A plan that carries injected nodes but no stamped identity was hinted manually via SQL
+      // (SparkXHintRule), not by us — don't fold that run into the learned profile.
+      val identityOpt = PlanHints.identityFrom(analyzed)
+      if (identityOpt.isEmpty && PlanHints.hasInjected(analyzed)) return
+      // Prefer the identity the fix side stamped (needed for complex skew rewrites that strip
+      // can't structurally reverse); fall back to structural strip for un-stamped runs.
+      val (fingerprint, appliedHints, pristine) = identityOpt match {
+        case Some((fp, hints)) => (fp, hints, analyzed)
+        case None =>
+          val fp = PlanHints.fingerprintOf(analyzed)
+          val (pris, hints) = PlanHints.strip(analyzed)
+          (fp, hints, pris)
+      }
       if (fingerprint.isEmpty) return
 
-      val (pristine, appliedHints) = PlanHints.strip(analyzed)
-      val planStr = try pristine.treeString catch { case _: Throwable => "" }
+      // Capture the *executed* physical plan so the profile shows the real effect of the hints
+      // (e.g. SortMergeJoin -> BroadcastHashJoin). The baseline is the un-hinted run's physical
+      // plan; the current is refreshed every run. Falling back to the logical plan text on error.
+      val planStr = try qe.executedPlan.treeString
+                    catch { case _: Throwable => try pristine.treeString catch { case _: Throwable => "" } }
       val sample = try qe.logical.treeString catch { case _: Throwable => "" }
       val durationMs = math.max(0L, durationNs / 1000000L)
       val advice = PlanAdvisor.advise(qe, config)
+      val recommendations = try PlanAdvisor.recommendations(qe, config) catch { case _: Throwable => Nil }
 
       fingerprint.intern().synchronized {
         val existing = store.load(fingerprint)
@@ -39,7 +55,8 @@ class AutoFixLearner(config: SparkXConfig, store: FixProfileStore) extends Query
         val withPlans = withSample.copy(
           baselinePlan = withSample.baselinePlan.orElse(
             if (appliedHints.isEmpty) Some(planStr) else None),
-          currentPlan = Some(planStr)
+          currentPlan = Some(planStr),
+          recommendations = if (recommendations.nonEmpty) recommendations else withSample.recommendations
         )
         val updated = HintPolicy.update(
           withPlans, appliedHints, durationMs, advice, config.autofixMaxIterations)

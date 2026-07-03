@@ -308,6 +308,40 @@ SparkX groups co-occurring issues by stage into **root-cause clusters**, providi
 
 ---
 
+## Auto-Fix — Closed-Loop Hint Injection (experimental)
+
+Beyond *detecting* problems, SparkX can **fix** them. Auto-fix is an opt-in, self-tuning optimizer that
+observes each query as it runs, learns which plan-level hints make it faster, persists that knowledge by
+a stable query fingerprint, and — on later runs of the same query — injects the winning hints
+automatically. It covers **both SparkSQL text and the DataFrame/Dataset API**, because it works on the
+resolved logical plan rather than SQL strings.
+
+- **Learns a closed loop.** Each run is measured; `HintPolicy` keeps the strictly-fastest hint set (so
+  it never regresses) and tries a new candidate until it converges or hits the iteration budget.
+- **Handles join skew.** It can inject **split / N-way broadcast**, **uniform salting**, or **targeted
+  salting** (salt only sampled hot keys, avoiding the ×saltFactor blow-up on cold data).
+- **Usable as SQL hints too.** Write `/*+ SPLIT_BROADCAST(dim, 6) */`, `/*+ SALT(dim, 16) */`, or
+  `/*+ TARGETED_SALT(dim, 16, 0) */` directly in query text.
+- **Safe by default.** Disabled unless enabled; read-only in `learn`/`shadow` mode; every failure is
+  swallowed so it can never break or slow the host job.
+
+Enable it (separate from the read-only UI listener):
+
+```bash
+spark-submit \
+  --conf spark.sql.extensions=org.apache.spark.sql.sparkx.SparkXAutoFixExtension \
+  --conf spark.sparkx.autofix.enabled=true \
+  --conf spark.sparkx.autofix.mode=auto \
+  --conf spark.sparkx.autofix.store.path=file:///var/lib/sparkx-autofix \
+  ...
+```
+
+Learned profiles appear under the **SparkX → Auto-Fix** tab. See **[docs/autofix.md](docs/autofix.md)**
+for the full design: the closed loop, fingerprinting, the hint catalog, skew resolution and hot-key
+discovery, modes, tag-based identity, and the complete configuration reference.
+
+---
+
 ## Integration
 
 ### Live Application
@@ -388,6 +422,28 @@ All thresholds are configurable via `SparkConf` or `spark-defaults.conf`.
 | `spark.sparkx.suggestion.excessiveShuffleCount` | `4` | Suggest shuffle review when exchange count exceeds this. |
 | `spark.sparkx.suggestion.partitionPruneScanMinMB` | `1024` | Minimum scan size (MB) before missing partition pruning is flagged. |
 | `spark.sparkx.suggestion.collectLargeDataMinMB` | `100` | Flag collect operations on datasets larger than this (MB). |
+
+### Auto-Fix (experimental)
+
+All keys require `spark.sparkx.autofix.enabled=true` and
+`spark.sql.extensions=org.apache.spark.sql.sparkx.SparkXAutoFixExtension`. See
+**[docs/autofix.md](docs/autofix.md)** for details.
+
+| Key | Default | Description |
+|---|---|---|
+| `spark.sparkx.autofix.enabled` | `false` | Master switch for the closed-loop auto-fix system. |
+| `spark.sparkx.autofix.mode` | `auto` | `auto` (learn + apply) \| `learn` \| `shadow` (learn only) \| `fix` (apply learned). |
+| `spark.sparkx.autofix.store.path` | temp dir | Hadoop-compatible path for persisted fix profiles. |
+| `spark.sparkx.autofix.maxIterations` | `5` | Hinted attempts before locking in the best hint set. |
+| `spark.sparkx.autofix.broadcastMaxBytes` | `10485760` (10 MB) | Join side below this triggers a plain `BROADCAST`. |
+| `spark.sparkx.autofix.targetPartitionBytes` | `134217728` (128 MB) | Desired bytes per shuffle partition when tuning repartition/coalesce. |
+| `spark.sparkx.autofix.skew.factor` | `10.0` | Join is skew-prone when `max(side)/min(side) ≥ this`; `≤ 1` forces skew handling on all joins. |
+| `spark.sparkx.autofix.skew.broadcastMaxBytes` | `104857600` (100 MB) | Build side below this → split broadcast; above → salting. |
+| `spark.sparkx.autofix.skew.saltFactor` | `16` | Number of salt buckets for a salted join. |
+| `spark.sparkx.autofix.skew.targeted` | `true` | Discover hot keys (sampling) and salt only those; off → uniform salting. |
+| `spark.sparkx.autofix.skew.sampleFraction` | `0.01` | Fraction of the skewed side sampled during hot-key discovery. |
+| `spark.sparkx.autofix.skew.thresholdMultiplier` | `10.0` | A key is hot when its sampled freq `≥ median × this`. |
+| `spark.sparkx.autofix.skew.maxKeys` | `100` | Cap on how many hot keys to salt. |
 
 ### Example Override
 
@@ -476,6 +532,27 @@ The `suggestion` scenario runs 7 steps that trigger optimization suggestions (AQ
 | Query with 200 partitions on small data | Partition mismatch | Shuffle Partition Tuning |
 
 Detection thresholds are automatically lowered for the demo to ensure issues are reliably flagged on any hardware.
+
+### Auto-Fix Demo
+
+A separate launcher exercises the closed-loop [auto-fix](docs/autofix.md) system end-to-end (it uses
+sbt's classpath, so no `spark-submit` is needed):
+
+**Windows:**
+```bat
+run-autofix-demo.cmd            REM all scenarios
+run-autofix-demo.cmd skew       REM skew resolution only
+run-autofix-demo.cmd all --pause
+```
+
+| Name | Argument | What it shows |
+|---|---|---|
+| Broadcast | `broadcast` | Learns and injects a `BROADCAST` hint, turning a shuffle join into a broadcast join. |
+| Partitioning | `partitioning` | Tunes `REPARTITION`/`COALESCE` across runs toward the fastest partition count. |
+| Skew resolution | `skew` | 20 M rows, 95% sharing one key: injects a skew rewrite (`SPLIT_BROADCAST`/`SALT`/`TARGETED_SALT`), verifies row-count parity, and prints the hot key discovered by sampling. |
+
+Watch it learn live at `http://localhost:4040/sparkx/autofix`.
+
 
 ---
 

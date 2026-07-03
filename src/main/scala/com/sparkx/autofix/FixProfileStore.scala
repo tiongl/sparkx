@@ -125,7 +125,8 @@ object FixProfileStore {
     attempts:     List[AttemptDTO],
     updatedTs:    Long,
     baselinePlan: Option[String] = None,
-    currentPlan:  Option[String] = None
+    currentPlan:  Option[String] = None,
+    recommendations: List[String] = Nil
   )
 
   private def parseHints(rendered: Seq[String]): Seq[Hint] = rendered.flatMap(Hint.parse)
@@ -143,7 +144,8 @@ object FixProfileStore {
                      AttemptDTO(a.hints.map(_.render).toList, a.durationMs, a.ts, a.improved)).toList,
     updatedTs    = p.updatedTs,
     baselinePlan = p.baselinePlan,
-    currentPlan  = p.currentPlan
+    currentPlan  = p.currentPlan,
+    recommendations = p.recommendations.map(_.render).toList
   ))
 
   def fromJson(text: String): FixProfile = {
@@ -160,7 +162,8 @@ object FixProfileStore {
                        FixAttempt(parseHints(a.hints), a.durationMs, a.ts, a.improved)),
       updatedTs    = d.updatedTs,
       baselinePlan = d.baselinePlan,
-      currentPlan  = d.currentPlan
+      currentPlan  = d.currentPlan,
+      recommendations = parseHints(d.recommendations)
     )
   }
 }
